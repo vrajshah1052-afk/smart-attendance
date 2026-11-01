@@ -1,0 +1,26 @@
+# --- web / API
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+email-validator==2.2.0
+python-multipart==0.0.19
+# --- databases
+SQLAlchemy==2.0.36
+PyMySQL==1.1.1
+pymongo==4.10.1
+# --- security
+cryptography==44.0.0
+PyJWT==2.10.1
+bcrypt==4.2.1
+# --- vision / numeric
+numpy==1.26.4
+scipy==1.13.1
+opencv-python-headless==4.10.0.84
+Pillow==11.0.0
+# --- reports, QR, jobs, charts
+openpyxl==3.1.5
+reportlab==4.2.5
+qrcode==8.0
+APScheduler==3.10.4
+matplotlib==3.9.3

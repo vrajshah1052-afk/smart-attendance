@@ -1,0 +1,248 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------
+   Tokens. "Aurora": dark = midnight indigo lit by violet, cyan and pink
+   light, light = lavender mist. Status colours keep the register's
+   meaning: ink = present, amber = late, rose = absent, orchid = spoof.
+   ------------------------------------------------------------------ */
+:root {
+  --bg: 245 244 255;
+  --panel: 255 255 255;
+  --panel2: 241 239 255;
+  --line: 224 221 246;
+  --fg: 23 21 56;
+  --muted: 96 94 138;
+  --ink: 104 72 245;
+  --onink: 255 255 255;
+  --late: 190 112 0;
+  --absent: 221 33 76;
+  --spoof: 180 40 200;
+  --glow1: 139 92 246;
+  --glow2: 14 165 233;
+  --glow3: 236 72 153;
+  --glass: 0.72;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: 6 8 20;
+  --panel: 15 18 38;
+  --panel2: 24 28 56;
+  --line: 43 49 92;
+  --fg: 238 240 255;
+  --muted: 152 159 207;
+  --ink: 160 142 255;
+  --onink: 10 8 30;
+  --late: 252 196 78;
+  --absent: 255 112 140;
+  --spoof: 236 132 255;
+  --glow1: 124 58 237;
+  --glow2: 34 211 238;
+  --glow3: 236 72 153;
+  --glass: 0.62;
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply text-fg antialiased;
+    font-size: 15px;
+    line-height: 1.6;
+    background-color: rgb(var(--bg));
+    background-image:
+      radial-gradient(70rem 45rem at 0% -10%, rgb(var(--glow1) / 0.16), transparent 60%),
+      radial-gradient(55rem 40rem at 100% 0%, rgb(var(--glow2) / 0.11), transparent 60%),
+      radial-gradient(50rem 40rem at 60% 120%, rgb(var(--glow3) / 0.1), transparent 60%);
+    background-attachment: fixed;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display font-semibold tracking-tight text-fg;
+    line-height: 1.2;
+  }
+  ::selection {
+    background: rgb(var(--ink) / 0.3);
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--ink));
+    outline-offset: 2px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--line)) transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* ---------------- surfaces ---------------- */
+  .glass {
+    background-color: rgb(var(--panel) / var(--glass));
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+  }
+  .sheet {
+    @apply glass rounded-2xl border border-line/70;
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.05),
+      0 24px 48px -28px rgb(0 0 0 / 0.45);
+  }
+  /* 1px gradient outline that follows the border radius */
+  .glow-border {
+    position: relative;
+  }
+  .glow-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgb(var(--glow1) / 0.8), rgb(var(--glow2) / 0.45) 50%, rgb(var(--glow3) / 0.7));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .text-gradient {
+    background-image: linear-gradient(100deg, rgb(var(--fg)) 10%, rgb(var(--ink)) 50%, rgb(var(--glow2)) 95%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-aurora {
+    background-image: linear-gradient(90deg, rgb(var(--glow1)), rgb(var(--glow2)), rgb(var(--glow3)), rgb(var(--glow1)));
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    @apply animate-shimmer;
+  }
+  .eyebrow {
+    @apply text-[11px] font-bold uppercase tracking-[0.18em] text-muted;
+  }
+
+  /* ---------------- buttons ---------------- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold
+      transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply text-white;
+    background-image: linear-gradient(135deg, rgb(var(--glow1)), rgb(var(--ink)) 50%, rgb(var(--glow3)));
+    background-size: 160% 160%;
+    background-position: 0% 50%;
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.25),
+      0 10px 28px -10px rgb(var(--glow1) / 0.8);
+  }
+  .btn-primary:not(:disabled):hover {
+    background-position: 100% 50%;
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.25),
+      0 14px 34px -10px rgb(var(--glow3) / 0.75);
+  }
+  .btn-quiet {
+    @apply glass border border-line/80 text-fg hover:border-ink/50 hover:bg-panel2/70;
+  }
+  .btn-danger {
+    @apply border border-absent/50 bg-absent/5 text-absent hover:bg-absent/15;
+  }
+  .btn-sm {
+    @apply rounded-lg px-2.5 py-1.5 text-xs;
+  }
+
+  /* ---------------- forms ---------------- */
+  .input {
+    @apply w-full rounded-xl border border-line/80 bg-panel2/50 px-3.5 py-2.5 text-sm text-fg placeholder:text-muted/70
+      transition-[border-color,box-shadow] duration-200 focus:border-ink/70 focus:outline-none;
+  }
+  .input:focus {
+    box-shadow: 0 0 0 4px rgb(var(--ink) / 0.15);
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-semibold text-fg;
+  }
+  .hint {
+    @apply mt-1 text-xs text-muted;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------------- the register: ruled rows + rose margin rule after the roll column ---------------- */
+  .register {
+    @apply w-full border-collapse text-sm;
+  }
+  .register th {
+    @apply border-b border-line/80 px-3.5 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted;
+  }
+  .register td {
+    @apply border-b border-line/50 px-3.5 py-2.5 align-middle transition-colors;
+  }
+  .register tr:last-child td {
+    @apply border-b-0;
+  }
+  .register .roll {
+    @apply w-14 text-right tnum text-muted;
+    border-right: 2px solid rgb(var(--absent) / 0.45);
+  }
+  .register tbody tr:hover td {
+    background-color: rgb(var(--ink) / 0.07);
+  }
+
+  /* handwritten attendance marks */
+  .mark {
+    @apply inline-block font-hand font-bold leading-none;
+    text-shadow: 0 0 14px currentColor;
+  }
+  .mark-ink-in {
+    animation: ink-in 420ms ease-out both;
+  }
+
+  /* floating light behind the app (rendered by <Aurora />) */
+  .aurora-blob {
+    @apply pointer-events-none absolute rounded-full;
+    filter: blur(90px);
+    opacity: 0.55;
+  }
+  .dark .aurora-blob {
+    opacity: 0.4;
+  }
+  .grid-fade {
+    background-image:
+      linear-gradient(rgb(var(--fg) / 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--fg) / 0.045) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 70%);
+    mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 70%);
+  }
+}
+
+@keyframes ink-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) rotate(-8deg) scale(1.25);
+    filter: blur(1.5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}

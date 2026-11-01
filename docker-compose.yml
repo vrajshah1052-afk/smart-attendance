@@ -1,0 +1,128 @@
+# Smart Face Recognition Attendance System
+# Usage:  cp .env.example .env  &&  docker compose up --build
+name: smart-attendance
+
+services:
+  # ------------------------------------------------------------------ MySQL 8
+  mysql:
+    image: mysql:8.0
+    container_name: sfa-mysql
+    restart: unless-stopped
+    command:
+      - --default-time-zone=+05:30
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --max-connections=200
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: attendance_db
+      # consumed by db/mysql/03_roles.sh (least-privilege users)
+      MYSQL_APP_USER: ${MYSQL_APP_USER:-attendance_app}
+      MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:?Set MYSQL_APP_PASSWORD in .env}
+      MYSQL_ADMIN_USER: ${MYSQL_ADMIN_USER:-attendance_admin}
+      MYSQL_ADMIN_PASSWORD: ${MYSQL_ADMIN_PASSWORD:?Set MYSQL_ADMIN_PASSWORD in .env}
+      MYSQL_REPORT_USER: ${MYSQL_REPORT_USER:-attendance_report}
+      MYSQL_REPORT_PASSWORD: ${MYSQL_REPORT_PASSWORD:?Set MYSQL_REPORT_PASSWORD in .env}
+      TZ: Asia/Kolkata
+    ports:
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # TCP + app user + real table => only healthy after ALL init scripts finished
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -u\"$$MYSQL_APP_USER\" -p\"$$MYSQL_APP_PASSWORD\" -e 'SELECT 1 FROM attendance_db.app_meta LIMIT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # ---------------------------------------------------------------- MongoDB 7
+  mongo:
+    image: mongo:7.0
+    container_name: sfa-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: attendance_logs
+      MONGO_APP_USER: ${MONGO_APP_USER:-attendance_app}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?Set MONGO_APP_PASSWORD in .env}
+      RECOGNITION_LOG_TTL_DAYS: ${RECOGNITION_LOG_TTL_DAYS:-90}
+      SNAPSHOT_TTL_DAYS: ${SNAPSHOT_TTL_DAYS:-30}
+      TZ: Asia/Kolkata
+    ports:
+      - "${MONGO_HOST_PORT:-27018}:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./db/mongo/init-mongo.js:/docker-entrypoint-initdb.d/01-init-mongo.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # ------------------------------------------------- Mail catcher (demo SMTP)
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: sfa-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"   # web inbox: http://localhost:8025
+
+  # ------------------------------------------------------------ FastAPI app
+  backend:
+    build:
+      context: ./backend
+      args:
+        PRELOAD_MODELS: ${PRELOAD_MODELS:-true}
+        INSTALL_DLIB: ${INSTALL_DLIB:-false}
+    container_name: sfa-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: attendance_db
+      MONGO_HOST: mongo
+      MONGO_PORT: 27017
+      MONGO_DB: attendance_logs
+      DATA_DIR: /app/data
+      INSIGHTFACE_ROOT: /models
+      TZ: Asia/Kolkata
+    ports:
+      - "${BACKEND_HOST_PORT:-8000}:8000"
+    volumes:
+      - backend_data:/app/data
+      - insightface_models:/models
+      - ./benchmarks:/app/benchmarks
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  # ------------------------------------------------------ React + nginx SPA
+  frontend:
+    build: ./frontend
+    container_name: sfa-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_HOST_PORT:-3000}:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+  mongo_data:
+  backend_data:
+  insightface_models:

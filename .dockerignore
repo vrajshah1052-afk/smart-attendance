@@ -1,0 +1,17 @@
+.git
+.claude
+.env
+.env.*
+!.env.example
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+backend/.venv
+backend/data
+backend/models
+backend/benchmarks
+frontend/node_modules
+frontend/dist
+local
+docs

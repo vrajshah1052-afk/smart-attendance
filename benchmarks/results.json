@@ -1,0 +1,233 @@
+{
+  "threshold": 0.45,
+  "queries": 500,
+  "per_student": 5,
+  "difficulty": "realistic",
+  "faiss_available": true,
+  "results": [
+    {
+      "backend": "numpy",
+      "embeddings": 100,
+      "students": 20,
+      "p50_ms": 0.0065,
+      "p95_ms": 0.0875,
+      "mean_ms": 0.1179,
+      "top1_accuracy": 0.998,
+      "false_reject_rate": 0.002,
+      "false_accept_rate": 0.0,
+      "batch_qps": 396878.0,
+      "build_ms": 0.36
+    },
+    {
+      "backend": "faiss-flat",
+      "embeddings": 100,
+      "students": 20,
+      "p50_ms": 0.0049,
+      "p95_ms": 0.0052,
+      "mean_ms": 0.011,
+      "top1_accuracy": 0.998,
+      "false_reject_rate": 0.002,
+      "false_accept_rate": 0.0,
+      "batch_qps": 129596.6,
+      "build_ms": 0.28
+    },
+    {
+      "backend": "faiss-hnsw",
+      "embeddings": 100,
+      "students": 20,
+      "p50_ms": 0.0256,
+      "p95_ms": 0.0263,
+      "mean_ms": 0.0289,
+      "top1_accuracy": 0.998,
+      "false_reject_rate": 0.002,
+      "false_accept_rate": 0.0,
+      "batch_qps": 121459.9,
+      "build_ms": 2.28
+    },
+    {
+      "backend": "numpy",
+      "embeddings": 1000,
+      "students": 200,
+      "p50_ms": 0.0535,
+      "p95_ms": 0.1644,
+      "mean_ms": 0.0853,
+      "top1_accuracy": 1.0,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.0,
+      "batch_qps": 139473.2,
+      "build_ms": 4.0
+    },
+    {
+      "backend": "faiss-flat",
+      "embeddings": 1000,
+      "students": 200,
+      "p50_ms": 0.03,
+      "p95_ms": 0.0775,
+      "mean_ms": 0.0552,
+      "top1_accuracy": 1.0,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.0,
+      "batch_qps": 699016.2,
+      "build_ms": 0.27
+    },
+    {
+      "backend": "faiss-hnsw",
+      "embeddings": 1000,
+      "students": 200,
+      "p50_ms": 0.0374,
+      "p95_ms": 0.0824,
+      "mean_ms": 0.0521,
+      "top1_accuracy": 1.0,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.0,
+      "batch_qps": 90140.2,
+      "build_ms": 17.79
+    },
+    {
+      "backend": "numpy",
+      "embeddings": 10000,
+      "students": 2000,
+      "p50_ms": 0.5586,
+      "p95_ms": 1.5598,
+      "mean_ms": 0.6456,
+      "top1_accuracy": 0.998,
+      "false_reject_rate": 0.002,
+      "false_accept_rate": 0.0,
+      "batch_qps": 19105.5,
+      "build_ms": 20.56
+    },
+    {
+      "backend": "faiss-flat",
+      "embeddings": 10000,
+      "students": 2000,
+      "p50_ms": 0.2882,
+      "p95_ms": 0.7969,
+      "mean_ms": 0.4899,
+      "top1_accuracy": 0.998,
+      "false_reject_rate": 0.002,
+      "false_accept_rate": 0.0,
+      "batch_qps": 95690.7,
+      "build_ms": 2.15
+    },
+    {
+      "backend": "faiss-hnsw",
+      "embeddings": 10000,
+      "students": 2000,
+      "p50_ms": 0.1372,
+      "p95_ms": 0.1745,
+      "mean_ms": 0.1385,
+      "top1_accuracy": 0.998,
+      "false_reject_rate": 0.002,
+      "false_accept_rate": 0.0,
+      "batch_qps": 35630.6,
+      "build_ms": 311.45
+    }
+  ],
+  "threshold_sweep": [
+    {
+      "threshold": 0.2,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.586
+    },
+    {
+      "threshold": 0.225,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.416
+    },
+    {
+      "threshold": 0.25,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.246
+    },
+    {
+      "threshold": 0.275,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.098
+    },
+    {
+      "threshold": 0.3,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.026
+    },
+    {
+      "threshold": 0.325,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.004
+    },
+    {
+      "threshold": 0.35,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.002
+    },
+    {
+      "threshold": 0.375,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.002
+    },
+    {
+      "threshold": 0.4,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.425,
+      "false_reject_rate": 0.0,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.45,
+      "false_reject_rate": 0.002,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.475,
+      "false_reject_rate": 0.004,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.5,
+      "false_reject_rate": 0.018,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.525,
+      "false_reject_rate": 0.036,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.55,
+      "false_reject_rate": 0.098,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.575,
+      "false_reject_rate": 0.172,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.6,
+      "false_reject_rate": 0.254,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.625,
+      "false_reject_rate": 0.368,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.65,
+      "false_reject_rate": 0.482,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.675,
+      "false_reject_rate": 0.612,
+      "false_accept_rate": 0.0
+    },
+    {
+      "threshold": 0.7,
+      "false_reject_rate": 0.72,
+      "false_accept_rate": 0.0
+    }
+  ]
+}

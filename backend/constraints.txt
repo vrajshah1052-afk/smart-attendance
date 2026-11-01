@@ -1,0 +1,8 @@
+# Applied to every pip install (PIP_CONSTRAINT) so transitive dependencies of
+# insightface never upgrade numpy to 2.x: insightface's Cython extension is
+# compiled against numpy 1.26 and would fail with "numpy.dtype size changed".
+numpy==1.26.4
+onnx==1.17.0
+scikit-image==0.24.0
+scikit-learn==1.5.2
+albumentations==1.4.24

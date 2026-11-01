@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+!.env.cloud.example
+.claude/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+backend/data/
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+*.log
+local/face_snapshots/
+backend/models/
