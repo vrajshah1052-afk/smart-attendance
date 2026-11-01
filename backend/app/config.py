@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     insightface_model: str = "buffalo_l"
     insightface_root: str = "/models"
     det_size: int = 640
+    face_threads: int = 0  # onnxruntime threads (0 = one per core); 1 on a fractional-CPU container
+    face_low_memory: bool = False  # arcface_onnx: trade some speed for a lower memory peak (512 MB hosts)
     match_threshold: float | None = None
     duplicate_threshold: float | None = None
     low_conf_margin: float = 0.08

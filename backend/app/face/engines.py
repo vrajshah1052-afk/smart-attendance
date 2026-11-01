@@ -122,7 +122,8 @@ class ArcFaceOnnxEngine(FaceEngine):
     supports_pose = True
     _strides = (8, 16, 32)
 
-    def __init__(self, model_name: str = "buffalo_l", root: str = "/models", det_size: int = 640) -> None:
+    def __init__(self, model_name: str = "buffalo_l", root: str = "/models", det_size: int = 640,
+                 threads: int = 0, low_memory: bool = False) -> None:
         import onnxruntime as ort  # heavy import, lazy
 
         folder = Path(root) / "models" / model_name
@@ -136,6 +137,12 @@ class ArcFaceOnnxEngine(FaceEngine):
 
         opts = ort.SessionOptions()
         opts.log_severity_level = 3
+        if threads:
+            opts.intra_op_num_threads = opts.inter_op_num_threads = threads
+        if low_memory:  # small containers: no arena / pre-planned buffers, no weight-copying layout passes
+            opts.enable_cpu_mem_arena = False
+            opts.enable_mem_pattern = False
+            opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
 
         def session(path: str) -> "ort.InferenceSession":
             return ort.InferenceSession(path, sess_options=opts, providers=["CPUExecutionProvider"])
@@ -344,7 +351,8 @@ class OpenCVEngine(FaceEngine):
 
 
 # ------------------------------------------------------------------------ factory
-def create_engine(kind: str, model_name: str, root: str, det_size: int) -> FaceEngine:
+def create_engine(kind: str, model_name: str, root: str, det_size: int, threads: int = 0,
+                  low_memory: bool = False) -> FaceEngine:
     kind = (kind or "auto").lower()
     order = ["insightface", "arcface_onnx", "face_recognition", "opencv"] if kind == "auto" else [kind]
     errors: list[str] = []
@@ -353,7 +361,8 @@ def create_engine(kind: str, model_name: str, root: str, det_size: int) -> FaceE
             if candidate == "insightface":
                 return InsightFaceEngine(model_name=model_name, root=root, det_size=det_size)
             if candidate == "arcface_onnx":
-                return ArcFaceOnnxEngine(model_name=model_name, root=root, det_size=det_size)
+                return ArcFaceOnnxEngine(model_name=model_name, root=root, det_size=det_size, threads=threads,
+                                         low_memory=low_memory)
             if candidate == "face_recognition":
                 return FaceRecognitionEngine()
             if candidate == "opencv":

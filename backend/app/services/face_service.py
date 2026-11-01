@@ -41,7 +41,8 @@ class _EngineHolder:
         s = get_settings()
         started = time.perf_counter()
         try:
-            engine = create_engine(s.face_engine, s.insightface_model, s.insightface_root, s.det_size)
+            engine = create_engine(s.face_engine, s.insightface_model, s.insightface_root, s.det_size,
+                                   threads=s.face_threads, low_memory=s.face_low_memory)
             with self._lock:
                 self.engine, self.status, self.error = engine, "ready", None
                 self.loaded_at = time.time()

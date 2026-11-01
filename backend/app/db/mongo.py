@@ -66,10 +66,12 @@ def ping_mongo() -> bool:
 
 def wait_for_mongo(retries: int, delay: float = 2.0) -> bool:
     for attempt in range(1, retries + 1):
-        if ping_mongo():
+        try:
+            get_db().command("ping")
             logger.info("MongoDB reachable (attempt %d)", attempt)
             return True
-        logger.warning("MongoDB not reachable yet (attempt %d/%d)", attempt, retries)
+        except PyMongoError as exc:  # say why: wrong password vs. IP not on the Atlas access list
+            logger.warning("MongoDB not reachable yet (attempt %d/%d): %s", attempt, retries, str(exc)[:400])
         time.sleep(delay)
     return False
 

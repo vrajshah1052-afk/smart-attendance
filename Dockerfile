@@ -17,7 +17,9 @@ RUN npm run build
 FROM python:3.12-slim AS models
 ARG INSIGHTFACE_MODEL=buffalo_s
 COPY backend/scripts/fetch_arcface.py /tmp/fetch_arcface.py
-RUN python /tmp/fetch_arcface.py ${INSIGHTFACE_MODEL} /models
+# onnx (build stage only) re-saves the big landmark model with external weights: lower load peak
+RUN pip install --no-cache-dir onnx==1.17.0 numpy==1.26.4 \
+ && python /tmp/fetch_arcface.py ${INSIGHTFACE_MODEL} /models
 
 # ---- 3. runtime ----
 FROM python:3.12-slim
@@ -33,6 +35,12 @@ ENV INSIGHTFACE_MODEL=${INSIGHTFACE_MODEL} \
     FRONTEND_DIST=/app/static \
     DATA_DIR=/app/data \
     FACE_ENGINE=arcface_onnx
+# 512 MB / fractional-CPU host: one compute thread, fewer malloc arenas, lean onnxruntime sessions
+ENV FACE_THREADS=1 \
+    FACE_LOW_MEMORY=true \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MALLOC_ARENA_MAX=2
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libglib2.0-0 libgomp1 tzdata \
