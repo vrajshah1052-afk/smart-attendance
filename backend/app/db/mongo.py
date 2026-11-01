@@ -15,6 +15,7 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 _client: MongoClient | None = None
+_last_error: str | None = None  # why the last ping failed (bad auth, IP not allowed, bad URI)
 _lock = threading.Lock()
 
 
@@ -57,21 +58,26 @@ def col(name: str) -> Collection:
 
 
 def ping_mongo() -> bool:
+    global _last_error
     try:
         get_db().command("ping")
+        _last_error = None
         return True
-    except PyMongoError:
+    except PyMongoError as exc:  # driver messages name hosts, never the password
+        _last_error = f"{type(exc).__name__}: {str(exc)[:300]}"
         return False
+
+
+def last_mongo_error() -> str | None:
+    return _last_error
 
 
 def wait_for_mongo(retries: int, delay: float = 2.0) -> bool:
     for attempt in range(1, retries + 1):
-        try:
-            get_db().command("ping")
+        if ping_mongo():
             logger.info("MongoDB reachable (attempt %d)", attempt)
             return True
-        except PyMongoError as exc:  # say why: wrong password vs. IP not on the Atlas access list
-            logger.warning("MongoDB not reachable yet (attempt %d/%d): %s", attempt, retries, str(exc)[:400])
+        logger.warning("MongoDB not reachable yet (attempt %d/%d): %s", attempt, retries, _last_error)
         time.sleep(delay)
     return False
 

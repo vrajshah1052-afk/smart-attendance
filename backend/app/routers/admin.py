@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.config import get_settings
 from app.core.deps import CurrentUser, require_admin
-from app.db.mongo import ping_mongo
+from app.db.mongo import last_mongo_error, ping_mongo
 from app.db.mysql import ping, transaction
 from app.repositories import overrides as ov_repo
 from app.repositories import saga as saga_repo
@@ -28,7 +28,8 @@ def health() -> dict:
     mysql_ok, mongo_ok = ping(), ping_mongo()
     engine = face_service.engine_status()
     status = "ok" if mysql_ok and mongo_ok and engine["status"] == "ready" else "degraded"
-    return {"status": status, "mysql": mysql_ok, "mongo": mongo_ok, "engine": engine,
+    return {"status": status, "mysql": mysql_ok, "mongo": mongo_ok,
+            "mongo_error": None if mongo_ok else last_mongo_error(), "engine": engine,
             "websocket_clients": live_manager.client_count, "version": get_settings().app_version}
 
 
