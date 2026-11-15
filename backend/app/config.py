@@ -69,12 +69,6 @@ class Settings(BaseSettings):
     admin_email: str = "admin@example.org"
     admin_password: str = ""
     demo_user_password: str = ""
-    # Teacher login: the 6-digit employee code is the username, password from .env
-    teacher_employee_code: str = ""
-    teacher_password: str = ""
-    teacher_full_name: str = "Teacher"
-    teacher_email: str = ""
-    teacher_branch: str = "CS"
     login_max_failures: int = 5
     login_lock_minutes: int = 15
 

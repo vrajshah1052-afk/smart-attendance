@@ -1,10 +1,9 @@
-"""Students: registration (saga), photos, CRUD, bulk import, delete / forget-me."""
+"""Students: registration (saga), photos, CRUD, delete / forget-me."""
 from __future__ import annotations
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
-from fastapi.responses import Response
 from pydantic import ValidationError
 
 from app.config import get_settings
@@ -15,7 +14,7 @@ from app.face.imageio import read_upload
 from app.repositories import embeddings as emb_repo
 from app.repositories import students as students_repo
 from app.schemas.students import ForgetRequest, RejectRequest, StudentCreate, StudentUpdate
-from app.services import importer, privacy, registration
+from app.services import privacy, registration
 from app.services.notify import event, notify
 
 router = APIRouter(prefix="/students", tags=["students"])
@@ -58,18 +57,6 @@ def register(
         raise validation_error(exc) from exc
     max_bytes = get_settings().max_upload_bytes
     return registration.register_student(payload, [read_upload(p, max_bytes) for p in photos], actor)
-
-
-@router.post("/import", summary="Bulk import students from CSV")
-def import_students(file: UploadFile = File(...), atomic: bool = Query(False, description="all-or-nothing"),
-                    actor: CurrentUser = Depends(require_staff)) -> dict:
-    return importer.import_csv(read_upload(file, 5 * 1024 * 1024), actor, atomic=atomic)
-
-
-@router.get("/import/template", summary="CSV template for bulk import")
-def import_template() -> Response:
-    return Response(importer.TEMPLATE, media_type="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=students_template.csv"})
 
 
 @router.get("", summary="List / search students")

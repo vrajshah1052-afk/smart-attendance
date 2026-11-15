@@ -234,14 +234,33 @@ export function fmtDateTime(value) {
     : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
-/** The one-hour slot the clock is in right now: 08:43 -> { start: '08:00', end: '09:00' }. */
-export function hourSlot(date = new Date()) {
-  const pad = (n) => String(n).padStart(2, '0')
-  const h = date.getHours()
-  return { start: `${pad(h)}:00`, end: h === 23 ? '23:59' : `${pad(h + 1)}:00` }
+const pad2 = (n) => String(n).padStart(2, '0')
+
+/** The one-hour slot an hour covers: 9 -> { start: '09:00', end: '10:00' }. */
+export function slotOf(hour) {
+  return { hour, start: `${pad2(hour)}:00`, end: hour === 23 ? '23:59' : `${pad2(hour + 1)}:00` }
 }
 
-export function todayISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+/** The slot the clock is in right now: 09:06 -> { start: '09:00', end: '10:00' }. */
+export function hourSlot(date = new Date()) {
+  return slotOf(date.getHours())
+}
+
+/** Every lecture slot of the day, 00:00-01:00 through 23:00-23:59. */
+export const SLOTS = Array.from({ length: 24 }, (_, h) => slotOf(h))
+
+export function slotLabel(hour) {
+  const s = slotOf(hour)
+  return `${s.start} - ${s.end}`
+}
+
+/** True when this session is the lecture belonging to the hour we are in. */
+export function isCurrentSlot(session) {
+  if (!session) return false
+  const now = new Date()
+  return session.session_date === todayISO(now) && Number(String(session.start_time).slice(0, 2)) === now.getHours()
+}
+
+export function todayISO(date = new Date()) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
 }

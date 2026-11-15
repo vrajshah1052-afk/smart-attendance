@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRight, AtSign, Database, Eye, EyeOff, KeyRound, Lock, QrCode, ScanFace, ShieldCheck, Sparkles, UserPlus } from 'lucide-react'
+import { api } from '../api/client'
 import { Aurora } from '../components/Aurora'
 import { ErrorNote, Mark } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
@@ -87,6 +88,15 @@ export default function Login() {
   const [show, setShow] = useState(false)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  // the roster can be closed: then there is no point offering a sign-up link
+  const [signupOpen, setSignupOpen] = useState(false)
+
+  useEffect(() => {
+    api
+      .get('/config/public')
+      .then((c) => setSignupOpen(!!c.self_registration))
+      .catch(() => setSignupOpen(false))
+  }, [])
 
   if (user) return <Navigate to={params.get('next') || (user.role === 'STUDENT' ? '/me' : '/')} replace />
 
@@ -243,16 +253,18 @@ export default function Login() {
               {!busy && <ArrowRight size={17} className="transition-transform group-hover:translate-x-0.5" />}
             </button>
           </div>
-          <Link
-            to="/signup"
-            className="mt-4 flex items-center justify-between rounded-xl border border-line/70 bg-panel2/50 px-4 py-3 text-sm transition-colors hover:border-ink/50"
-          >
-            <span>
-              <span className="font-semibold">New student? Sign up</span>{' '}
-              <span className="text-muted">Register your face, an admin approves you</span>
-            </span>
-            <UserPlus size={18} className="text-ink" />
-          </Link>
+          {signupOpen && (
+            <Link
+              to="/signup"
+              className="mt-4 flex items-center justify-between rounded-xl border border-line/70 bg-panel2/50 px-4 py-3 text-sm transition-colors hover:border-ink/50"
+            >
+              <span>
+                <span className="font-semibold">New student? Sign up</span>{' '}
+                <span className="text-muted">Register your face, an admin approves you</span>
+              </span>
+              <UserPlus size={18} className="text-ink" />
+            </Link>
+          )}
           <Link
             to="/join"
             className="mt-2 flex items-center justify-between rounded-xl border border-line/70 bg-panel2/50 px-4 py-3 text-sm transition-colors hover:border-ink/50"

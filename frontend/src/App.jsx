@@ -13,7 +13,6 @@ const LiveFeed = lazy(() => import('./pages/LiveFeed'))
 const Sessions = lazy(() => import('./pages/Sessions'))
 const Students = lazy(() => import('./pages/Students'))
 const RegisterStudent = lazy(() => import('./pages/RegisterStudent'))
-const BulkImport = lazy(() => import('./pages/BulkImport'))
 const ReviewQueue = lazy(() => import('./pages/ReviewQueue'))
 const Overrides = lazy(() => import('./pages/Overrides'))
 const Reports = lazy(() => import('./pages/Reports'))
@@ -93,7 +92,6 @@ export default function App() {
             <Route path="/courses" element={guard(<Courses />, STAFF)} />
             <Route path="/students" element={guard(<Students />, STAFF)} />
             <Route path="/students/register" element={guard(<RegisterStudent />, STAFF)} />
-            <Route path="/students/import" element={guard(<BulkImport />, STAFF)} />
             <Route path="/review" element={guard(<ReviewQueue />, STAFF)} />
             <Route path="/overrides" element={<Overrides />} />
             <Route path="/reports" element={guard(<Reports />, STAFF)} />

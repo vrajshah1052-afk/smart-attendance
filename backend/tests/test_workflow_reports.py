@@ -92,8 +92,7 @@ def test_exports(client, admin_headers, academic, student, fmt, magic) -> None:
 def test_analytics_endpoints(client, admin_headers) -> None:
     for path in ("/analytics/summary", "/analytics/daily-trend", "/analytics/course-wise", "/analytics/heatmap",
                  "/analytics/top-bottom", "/analytics/spoof-per-day", "/analytics/recognition-stats",
-                 "/analytics/low-confidence", "/analytics/today", "/health", "/config/public",
-                 "/admin/sagas", "/admin/audit"):
+                 "/analytics/low-confidence", "/analytics/today", "/health", "/config/public"):
         res = client.get(path, headers=admin_headers)
         assert res.status_code == 200, (path, res.text)
     spoof = client.get("/analytics/spoof-per-day", headers=admin_headers).json()

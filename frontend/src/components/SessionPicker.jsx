@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { ErrorNote, SessionStatus, todayISO } from './ui'
+import { ErrorNote, SessionStatus, hourSlot, isCurrentSlot, slotLabel, todayISO } from './ui'
 
-function pad(n) {
-  return String(n).padStart(2, '0')
-}
-
-/** Course + today's session selector, with "open" and "start a session now" shortcuts. */
+/** Course + today's session selector, with "open" and "start a lecture now" shortcuts.
+ *
+ * A lecture is one clock hour and only the one belonging to the hour we are in
+ * can be opened, so this is also what gates group attendance, late entry and
+ * live recognition: they all need an OPEN session. */
 export function SessionPicker({ value, onChange, requireOpen = true }) {
-  const { isAdmin } = useAuth()
   const toast = useToast()
   const [courses, setCourses] = useState([])
   const [courseId, setCourseId] = useState('')
@@ -50,38 +48,27 @@ export function SessionPicker({ value, onChange, requireOpen = true }) {
 
   const selected = useMemo(() => sessions.find((s) => s.session_id === value?.session_id), [sessions, value])
 
-  const openSelected = async (force = false) => {
+  const openSelected = async () => {
     if (!selected) return
     setBusy(true)
     try {
-      await api.post(`/sessions/${selected.session_id}/open`, { force })
+      await api.post(`/sessions/${selected.session_id}/open`, {})
       toast.success(`${selected.course_code} is open for attendance`)
       await loadSessions(selected.session_id)
     } catch (err) {
-      if (err.code === 'OUTSIDE_SESSION_WINDOW' && isAdmin) {
-        if (window.confirm(`${err.message}. Open it anyway?`)) return openSelected(true)
-      } else toast.error(err)
+      toast.error(err)
     } finally {
       setBusy(false)
     }
   }
 
+  // one click: the lecture for the hour we are in, already open
   const startNow = async () => {
     setBusy(true)
     try {
-      const now = new Date()
-      const end = new Date(now.getTime() + 60 * 60000)
-      const endTime = end.getDate() !== now.getDate() ? '23:59' : `${pad(end.getHours())}:${pad(end.getMinutes())}`
-      const created = await api.post('/sessions', {
-        course_id: Number(courseId),
-        session_date: todayISO(),
-        start_time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
-        end_time: endTime,
-        late_after_min: 10,
-        open_now: true,
-      })
+      const created = await api.post('/sessions/now', { course_id: Number(courseId) })
       setDay(todayISO())
-      toast.success('Session started and open for attendance')
+      toast.success(`${created.course_code} is open, ${created.start_time}-${created.end_time}`)
       await loadSessions(created.session_id)
     } catch (err) {
       toast.error(err)
@@ -138,13 +125,16 @@ export function SessionPicker({ value, onChange, requireOpen = true }) {
           </span>
         )}
         <span className="flex-1" />
-        {selected?.status === 'SCHEDULED' && (
-          <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => openSelected(false)}>
-            Open session
-          </button>
-        )}
+        {selected?.status === 'SCHEDULED' &&
+          (isCurrentSlot(selected) ? (
+            <button className="btn btn-primary btn-sm" disabled={busy} onClick={openSelected}>
+              Open session
+            </button>
+          ) : (
+            <span className="text-xs text-muted">Only the {slotLabel(hourSlot().hour)} lecture can be open now</span>
+          ))}
         <button className="btn btn-quiet btn-sm" disabled={busy || !courseId} onClick={startNow}>
-          Start a session now
+          Start the {slotLabel(hourSlot().hour)} lecture
         </button>
       </div>
       {requireOpen && selected && selected.status !== 'OPEN' && (

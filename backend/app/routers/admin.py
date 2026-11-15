@@ -1,4 +1,8 @@
-"""Admin: jobs, saga log, audit trail, system status. Health & public config."""
+"""Admin: jobs, system status. Health & public config.
+
+The audit trail and the saga log are still written (MySQL triggers and the saga
+recorder); they just have no endpoint or screen any more.
+"""
 from __future__ import annotations
 
 from typing import Literal
@@ -8,9 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from app.config import get_settings
 from app.core.deps import CurrentUser, require_admin
 from app.db.mongo import last_mongo_error, ping_mongo
-from app.db.mysql import ping, transaction
-from app.repositories import overrides as ov_repo
-from app.repositories import saga as saga_repo
+from app.db.mysql import ping
 from app.services import face_service
 from app.services.scheduler import JOBS
 from app.ws.manager import live_manager
@@ -42,7 +44,7 @@ def public_config() -> dict:
         "match_threshold": face_service.match_threshold(), "low_conf_margin": s.low_conf_margin,
         "liveness_required": s.liveness_required, "shortage_threshold": s.shortage_threshold,
         "qr_window_seconds": s.qr_window_seconds, "engine": engine.get("name"), "engine_status": engine["status"],
-        "max_upload_mb": s.max_upload_mb,
+        "max_upload_mb": s.max_upload_mb, "self_registration": s.self_registration_enabled,
     }
 
 
@@ -51,20 +53,6 @@ def run_job(job: Literal["auto_close_sessions", "recover_sagas", "daily_summary"
             _: CurrentUser = Depends(require_admin)) -> dict:
     result = JOBS[job]()
     return {"job": job, "result": result}
-
-
-@router.get("/admin/sagas", summary="Saga log (cross-database transactions)")
-def sagas(status: str | None = Query(None), limit: int = Query(100, ge=1, le=500),
-          _: CurrentUser = Depends(require_admin)) -> list[dict]:
-    return saga_repo.list_sagas(limit=limit, status=status)
-
-
-@router.get("/admin/audit", summary="Audit trail written by MySQL triggers")
-def audit(table: str | None = None, record_id: str | None = None, action: str | None = None,
-          limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0),
-          _: CurrentUser = Depends(require_admin)) -> list[dict]:
-    with transaction() as conn:
-        return ov_repo.list_audit(conn, table=table, record_id=record_id, action=action, limit=limit, offset=offset)
 
 
 @router.post("/admin/index/reload", summary="Force reload of the in-memory vector index")

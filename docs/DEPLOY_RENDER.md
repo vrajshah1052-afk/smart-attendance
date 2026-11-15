@@ -72,7 +72,7 @@ rules on start-up.
 1. Push this repository to GitHub.
 2. Render dashboard → **New** → **Blueprint** → pick the repository. Render
    reads `render.yaml`.
-3. Fill in the five values it asks for:
+3. Fill in the four values it asks for:
 
    | Variable | Value |
    |---|---|
@@ -80,7 +80,6 @@ rules on start-up.
    | `MYSQL_PORT` | Aiven port |
    | `MYSQL_APP_PASSWORD` | the `attendance_app` password from `.env.cloud` |
    | `MONGO_URI` | the Atlas connection string |
-   | `TEACHER_PASSWORD` | password for the teacher login |
 
 4. Apply. The first build takes roughly ten minutes: it installs the Python
    dependencies, downloads the `buffalo_s` ONNX models and builds the React app.
@@ -97,10 +96,9 @@ service, so decide before the first apply.
 - creates the admin account from `ADMIN_EMAIL` and the generated
   `ADMIN_PASSWORD` — read it under **Environment** in the Render dashboard, and
   change it from the app afterwards;
-- creates the optional extra teacher from `TEACHER_EMPLOYEE_CODE` (username)
-  and `TEACHER_PASSWORD`, re-syncing that password on every later deploy. The
-  real faculty come from `local/seed_subjects.py` or the admin's Teachers tab;
-  a teacher never registers themselves.
+- does **not** create any teacher. Teachers come from `local/seed_subjects.py`
+  or the admin's Teachers tab, sign in with their employee code, and can never
+  register themselves;
 - creates the MongoDB collections, indexes and TTL rules;
 - loads the face engine (the first request after a cold start is slow).
 
@@ -112,9 +110,15 @@ service, so decide before the first apply.
 | Teacher | their employee code, e.g. `VIT@001` | set by the admin (`local/seed_subjects.py` for the first five) |
 | Student | their PRN | chosen at sign-up |
 
-Students sign up themselves at `/signup`. The account is held until an admin
-approves it under **Admin → Pending approvals**; after that the student joins
-courses with a class code.
+`SELF_REGISTRATION_ENABLED` is `false`, so the roster is closed: no student can
+sign themselves up and only the students already in the database remain. Set it
+to `true` to reopen `/signup`, and each new account then waits for an admin
+under **Admin → Student approvals** before it can sign in.
+
+A lecture is one clock hour (07:00-08:00, 08:00-09:00, ...) and only the lecture
+belonging to the hour you are in can be opened, so at 09:15 only the 09:00-10:00
+one will start. Group attendance, late entry and live recognition all need an
+open session, so they inherit that rule.
 
 ---
 

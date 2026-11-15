@@ -109,9 +109,6 @@ export default function Students() {
         description="Profiles live in MySQL; face templates are encrypted in MongoDB and linked by PRN."
         actions={
           <>
-            <Link className="btn btn-quiet" to="/students/import">
-              Import from CSV
-            </Link>
             <Link className="btn btn-primary" to="/students/register">
               Register a student
             </Link>

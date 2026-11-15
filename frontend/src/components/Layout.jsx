@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   BarChart3, BookOpen, CalendarClock, ClipboardCheck, FileSpreadsheet, GitPullRequestArrow, Home, KeyRound, LogOut, Menu,
-  Moon, QrCode, Radio, ScanFace, Settings2, Sun, Timer, Upload, UserCheck, UserPlus, Users, X, ListChecks,
+  Moon, QrCode, Radio, ScanFace, Settings2, Sun, Timer, UserCheck, UserPlus, Users, X, ListChecks,
 } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -27,7 +27,6 @@ const STAFF_NAV = [
     items: [
       { to: '/students', label: 'All students', icon: Users, end: true },
       { to: '/students/register', label: 'Register a student', icon: UserPlus },
-      { to: '/students/import', label: 'Import from CSV', icon: Upload },
     ],
   },
   {
@@ -166,7 +165,7 @@ export function Layout() {
               section: 'Admin',
               items: [
                 { to: '/approvals', label: 'Student approvals', icon: UserCheck, badge: pendingApprovals },
-                { to: '/admin', label: 'System and audit', icon: Settings2 },
+                { to: '/admin', label: 'System', icon: Settings2 },
               ],
             }]
           : []),

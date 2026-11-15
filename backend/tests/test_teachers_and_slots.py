@@ -120,3 +120,32 @@ def test_starting_a_lecture_now_records_the_clock_hour(client, academic, teacher
 
     assert client.post("/sessions/now", json={"course_id": 999999}, headers=teacher_headers).status_code == 404
     assert client.post("/sessions/now", json={"course_id": course_id}).status_code == 401
+
+
+def test_a_lecture_must_be_a_whole_clock_hour(client, academic, teacher_headers) -> None:
+    course_id = academic["courses"]["TST201"]
+    base = {"course_id": course_id, "session_date": dt.date.today().isoformat()}
+
+    good = client.post("/sessions", json={**base, "start_time": "09:00", "end_time": "10:00"},
+                       headers=teacher_headers)
+    assert good.status_code == 201, good.text
+
+    for start, end in (("09:06", "10:06"), ("09:00", "11:00"), ("09:30", "10:30"), ("09:00", "09:45")):
+        bad = client.post("/sessions", json={**base, "start_time": start, "end_time": end}, headers=teacher_headers)
+        assert bad.status_code == 422, f"{start}-{end} should be refused, got {bad.status_code}"
+
+
+def test_only_this_hours_lecture_can_be_opened(client, academic, teacher_headers, admin_headers,
+                                               open_session) -> None:
+    # a scheduled lecture from three hours ago is not the one we are in
+    stale = open_session("TST202", minutes_ago=180, status="SCHEDULED")
+    res = client.post(f"/sessions/{stale}/open", json={}, headers=teacher_headers)
+    assert res.status_code == 409 and res.json()["code"] == "NOT_CURRENT_SLOT", res.text
+    # an admin gets the same answer: the clock is not a permission
+    assert client.post(f"/sessions/{stale}/open", json={"force": True},
+                       headers=admin_headers).json()["code"] == "NOT_CURRENT_SLOT"
+
+    # the lecture of the hour we are in opens
+    now_session = client.post("/sessions/now", json={"course_id": academic["courses"]["TST301"]},
+                              headers=teacher_headers)
+    assert now_session.status_code == 201 and now_session.json()["status"] == "OPEN"

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { Empty, ErrorNote, Field, Mark, Modal, PageHeader, SessionStatus, Spinner, fmtDate, hourSlot, todayISO } from '../components/ui'
-import { useAuth } from '../context/AuthContext'
+import { Empty, ErrorNote, Field, Mark, Modal, PageHeader, SLOTS, SessionStatus, Spinner, fmtDate, hourSlot, isCurrentSlot, slotLabel, todayISO } from '../components/ui'
 import { useToast } from '../context/ToastContext'
 import { useApi } from '../hooks/useApi'
 
@@ -80,15 +79,14 @@ function RosterModal({ session, onClose }) {
   )
 }
 
-// a new lecture defaults to the hour you are in, so 08:43 offers 08:00-09:00
+// every lecture is one clock hour; a new one defaults to the hour you are in
 const blank = () => {
-  const { start, end } = hourSlot()
-  return { course_id: '', session_date: todayISO(), start_time: start, end_time: end, late_after_min: 10, room: '', topic: '', open_now: false }
+  const { hour } = hourSlot()
+  return { course_id: '', session_date: todayISO(), hour, late_after_min: 10, room: '', topic: '', open_now: false }
 }
 
 export default function Sessions() {
   const toast = useToast()
-  const { isAdmin } = useAuth()
   const [filters, setFilters] = useState({ course_id: '', date: todayISO() })
   const courses = useApi(() => api.get('/courses'), [])
   const sessions = useApi(() => api.get('/sessions', filters), [filters.course_id, filters.date])
@@ -107,17 +105,13 @@ export default function Sessions() {
     }
   }
 
-  const openSession = (s, force = false) =>
-    act(() => api.post(`/sessions/${s.session_id}/open`, { force }), `${s.course_code} is open`).catch(() => {})
-
   const tryOpen = async (s) => {
     try {
-      await api.post(`/sessions/${s.session_id}/open`, { force: false })
+      await api.post(`/sessions/${s.session_id}/open`, {})
       toast.success(`${s.course_code} is open`)
       sessions.reload()
     } catch (err) {
-      if (err.code === 'OUTSIDE_SESSION_WINDOW' && isAdmin && window.confirm(`${err.message}. Open anyway?`)) openSession(s, true)
-      else toast.error(err)
+      toast.error(err)
     }
   }
 
@@ -142,7 +136,17 @@ export default function Sessions() {
     e.preventDefault()
     setError(null)
     try {
-      await api.post('/sessions', { ...form, course_id: Number(form.course_id), late_after_min: Number(form.late_after_min), room: form.room || null, topic: form.topic || null })
+      const slot = SLOTS[Number(form.hour)]
+      await api.post('/sessions', {
+        course_id: Number(form.course_id),
+        session_date: form.session_date,
+        start_time: slot.start,
+        end_time: slot.end,
+        late_after_min: Number(form.late_after_min),
+        room: form.room || null,
+        topic: form.topic || null,
+        open_now: form.open_now,
+      })
       toast.success('Session created')
       setForm(null)
       sessions.reload()
@@ -157,7 +161,7 @@ export default function Sessions() {
     <>
       <PageHeader
         title="Sessions"
-        description="Each lecture is a session. Attendance can only be marked while it is open; closing it marks everyone else absent."
+        description="Each lecture is one clock hour. Only the lecture belonging to the hour you are in can be open, and attendance can only be marked while it is."
         actions={
           <>
             <button className="btn btn-primary" onClick={startNow} disabled={!courses.data?.length}>
@@ -226,9 +230,15 @@ export default function Sessions() {
                     <div className="flex justify-end gap-1.5">
                       {s.status === 'SCHEDULED' && (
                         <>
-                          <button className="btn btn-primary btn-sm" onClick={() => tryOpen(s)}>
-                            Open
-                          </button>
+                          {isCurrentSlot(s) ? (
+                            <button className="btn btn-primary btn-sm" onClick={() => tryOpen(s)}>
+                              Open
+                            </button>
+                          ) : (
+                            <span className="self-center text-xs text-muted" title={`Only the ${slotLabel(hourSlot().hour)} lecture can be open right now`}>
+                              Not this hour
+                            </span>
+                          )}
                           <button className="btn btn-quiet btn-sm" onClick={() => window.confirm('Cancel this session?') && act(() => api.post(`/sessions/${s.session_id}/cancel`), 'Session cancelled')}>
                             Cancel
                           </button>
@@ -295,16 +305,34 @@ export default function Sessions() {
               </Field>
             </div>
             <Field label="Date">{(id) => <input id={id} type="date" className="input" required value={form.session_date} onChange={set('session_date')} />}</Field>
+            <Field label="Lecture slot" hint="Lectures are one hour long">
+              {(id) => (
+                <select id={id} className="input" required value={form.hour} onChange={set('hour')}>
+                  {SLOTS.map((s) => (
+                    <option key={s.hour} value={s.hour}>
+                      {s.start} - {s.end}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
             <Field label="Late after (minutes)" hint="Grace period before a student counts as late">
               {(id) => <input id={id} type="number" min="0" max="60" className="input" value={form.late_after_min} onChange={set('late_after_min')} />}
             </Field>
-            <Field label="Starts">{(id) => <input id={id} type="time" className="input" required value={form.start_time} onChange={set('start_time')} />}</Field>
-            <Field label="Ends">{(id) => <input id={id} type="time" className="input" required value={form.end_time} onChange={set('end_time')} />}</Field>
             <Field label="Room">{(id) => <input id={id} className="input" maxLength={20} value={form.room} onChange={set('room')} />}</Field>
             <Field label="Topic">{(id) => <input id={id} className="input" maxLength={200} value={form.topic} onChange={set('topic')} />}</Field>
             <label className="flex items-center gap-2 text-sm sm:col-span-2">
-              <input type="checkbox" checked={form.open_now} onChange={set('open_now')} className="h-4 w-4 accent-[rgb(var(--ink))]" />
+              <input
+                type="checkbox"
+                checked={form.open_now}
+                disabled={form.session_date !== todayISO() || Number(form.hour) !== hourSlot().hour}
+                onChange={set('open_now')}
+                className="h-4 w-4 accent-[rgb(var(--ink))]"
+              />
               Open for attendance straight away
+              {(form.session_date !== todayISO() || Number(form.hour) !== hourSlot().hour) && (
+                <span className="text-muted">(only the {slotLabel(hourSlot().hour)} lecture can be open now)</span>
+              )}
             </label>
             <ErrorNote error={error} className="sm:col-span-2" />
           </form>

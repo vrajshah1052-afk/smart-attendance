@@ -6,7 +6,7 @@ import pytest
 from app.db.mongo import C, col
 from app.db.mysql import fetch_one, fetch_scalar, transaction
 from tests.conftest import new_prn
-from tests.fakes import face, identity, noise_image, png, variant
+from tests.fakes import face, identity, png, variant
 
 pytestmark = pytest.mark.integration
 
@@ -103,19 +103,3 @@ def test_invalid_image_and_unknown_division(client, academic, register, admin_he
     assert res.status_code == 400 and res.json()["code"] == "INVALID_IMAGE"
     _, body = register(identity(10), division="Z", expect=422)
     assert body["code"] == "UNKNOWN_DIVISION"
-
-
-def test_bulk_csv_import_partial(client, academic, admin_headers) -> None:
-    p1, p2 = new_prn("CSV"), new_prn("CSV")
-    csv_text = ("prn,name,email,phone,branch,year,division,roll_no,consent\n"
-                f"{p1},Riya Csv,{p1.lower()}@student.example.org,9876543210,CS,2,B,201,yes\n"
-                f"{p2},Bad Row,not-an-email,9876543211,CS,2,B,202,yes\n"
-                f"{p1},Dup Row,dup@student.example.org,9876543212,CS,2,B,203,yes\n")
-    res = client.post("/students/import", files={"file": ("s.csv", csv_text, "text/csv")}, headers=admin_headers)
-    assert res.status_code == 200, res.text
-    out = res.json()
-    assert out["imported"] == 1 and out["failed"] == 2 and out["credentials_csv"]
-    with transaction() as conn:
-        row = fetch_one(conn, "SELECT face_status FROM students WHERE prn = :p", {"p": p1})
-    assert row["face_status"] == "PENDING"
-    assert noise_image  # keep import used

@@ -13,6 +13,8 @@ import {
   fmtDate,
   fmtDateTime,
   hourSlot,
+  isCurrentSlot,
+  slotLabel,
   todayISO,
 } from '../components/ui'
 import { useToast } from '../context/ToastContext'
@@ -99,148 +101,6 @@ function System() {
 }
 
 const SAGA_TONE = { COMPLETED: 'ink', COMPENSATED: 'late', FAILED: 'absent', STARTED: 'muted', COMPENSATING: 'late' }
-
-function Sagas() {
-  const sagas = useApi(() => api.get('/admin/sagas', { limit: 100 }), [])
-  return (
-    <>
-      <p className="mb-3 max-w-prose text-sm text-muted">
-        Registration and deletion touch both databases. Each step is a local transaction; if a later step fails the
-        earlier ones are undone in reverse order (compensation).
-      </p>
-      <div className="sheet overflow-x-auto">
-        {sagas.loading ? (
-          <Spinner className="p-4" />
-        ) : !sagas.data?.length ? (
-          <Empty title="No sagas yet" />
-        ) : (
-          <table className="register min-w-[760px]">
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Type</th>
-                <th>Subject</th>
-                <th>Steps</th>
-                <th>Result</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sagas.data.map((s) => (
-                <tr key={s.saga_id}>
-                  <td className="whitespace-nowrap text-xs">{fmtDateTime(s.created_at)}</td>
-                  <td>{s.saga_type.toLowerCase().replace('_', ' ')}</td>
-                  <td className="max-w-[140px] truncate text-xs" title={s.subject}>
-                    {s.subject}
-                  </td>
-                  <td className="text-xs">
-                    {s.steps.map((st) => (
-                      <span key={st.name} className="mr-2 inline-block">
-                        {st.name.replaceAll('_', ' ')}: <span className={st.status === 'DONE' ? 'text-ink' : st.status.includes('FAIL') ? 'text-absent' : 'text-late'}>{st.status.toLowerCase()}</span>
-                      </span>
-                    ))}
-                    {s.error_message && <div className="mt-1 text-absent">{s.error_message}</div>}
-                  </td>
-                  <td>
-                    <Chip tone={SAGA_TONE[s.status]}>{s.status.toLowerCase()}</Chip>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </>
-  )
-}
-
-function Diff({ oldV, newV }) {
-  const keys = [...new Set([...Object.keys(oldV || {}), ...Object.keys(newV || {})])]
-  return (
-    <div className="text-xs">
-      {keys.map((k) => {
-        const a = oldV?.[k]
-        const b = newV?.[k]
-        if (JSON.stringify(a) === JSON.stringify(b)) return null
-        return (
-          <div key={k}>
-            <span className="text-muted">{k}:</span> {a !== undefined && <span className="text-absent line-through">{String(a)}</span>} {b !== undefined && <span className="text-ink">{String(b)}</span>}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function Audit() {
-  const [filters, setFilters] = useState({ table: '', action: '', record_id: '' })
-  const audit = useApi(() => api.get('/admin/audit', { ...filters, limit: 200 }), [JSON.stringify(filters)])
-  const set = (k) => (e) => setFilters((f) => ({ ...f, [k]: e.target.value }))
-  return (
-    <>
-      <p className="mb-3 max-w-prose text-sm text-muted">
-        Written by MySQL triggers, not by the application. The application database user can read this table but
-        cannot change or delete rows.
-      </p>
-      <div className="mb-3 flex flex-wrap gap-2">
-        <select className="input w-auto" value={filters.table} onChange={set('table')} aria-label="Table">
-          <option value="">All tables</option>
-          <option value="attendance">attendance</option>
-          <option value="students">students</option>
-          <option value="override_requests">override_requests</option>
-        </select>
-        <select className="input w-auto" value={filters.action} onChange={set('action')} aria-label="Action">
-          <option value="">All actions</option>
-          {['INSERT', 'UPDATE', 'DELETE', 'OVERRIDE', 'ERASE'].map((a) => (
-            <option key={a} value={a}>
-              {a.toLowerCase()}
-            </option>
-          ))}
-        </select>
-        <input className="input w-auto" placeholder="Record id" value={filters.record_id} onChange={set('record_id')} aria-label="Record id" />
-      </div>
-      <div className="sheet overflow-x-auto">
-        {audit.loading ? (
-          <Spinner className="p-4" />
-        ) : !audit.data?.length ? (
-          <Empty title="No audit entries match" />
-        ) : (
-          <table className="register min-w-[860px]">
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>What</th>
-                <th>Change</th>
-                <th>Why</th>
-                <th>Who</th>
-              </tr>
-            </thead>
-            <tbody>
-              {audit.data.map((a) => (
-                <tr key={a.audit_id}>
-                  <td className="whitespace-nowrap text-xs">{fmtDateTime(a.changed_at)}</td>
-                  <td className="text-xs">
-                    <Chip tone={a.action === 'ERASE' || a.action === 'DELETE' ? 'absent' : a.action === 'OVERRIDE' ? 'late' : 'muted'}>{a.action.toLowerCase()}</Chip>
-                    <div className="mt-1">
-                      {a.table_name} <span className="text-muted">{a.record_id.length > 20 ? `${a.record_id.slice(0, 12)}…` : a.record_id}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <Diff oldV={a.old_values} newV={a.new_values} />
-                  </td>
-                  <td className="max-w-xs text-xs">{a.reason || <span className="text-muted">–</span>}</td>
-                  <td className="text-xs">
-                    {a.changed_by_username || '–'}
-                    <div className="text-muted">{a.db_user}</div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </>
-  )
-}
 
 function Teachers() {
   const toast = useToast()
@@ -617,8 +477,8 @@ function AttendanceCode() {
     }
   }
 
-  const openSession = async (s, force) => {
-    await api.post(`/sessions/${s.session_id}/open`, { force })
+  const openSession = async (s) => {
+    await api.post(`/sessions/${s.session_id}/open`, {})
     toast.success(`${s.course_code} is open`)
     const fresh = await sessions.reload()
     const row = (fresh || []).find((x) => x.session_id === s.session_id)
@@ -627,17 +487,9 @@ function AttendanceCode() {
 
   const open = async (s) => {
     try {
-      await openSession(s, false)
+      await openSession(s)
     } catch (err) {
-      if (err.code === 'OUTSIDE_SESSION_WINDOW' && window.confirm(`${err.message}. Open it anyway?`)) {
-        try {
-          await openSession(s, true)
-        } catch (err2) {
-          toast.error(err2)
-        }
-      } else {
-        toast.error(err)
-      }
+      toast.error(err)
     }
   }
 
@@ -650,7 +502,7 @@ function AttendanceCode() {
         When the camera does not recognise a student, they mark themselves with this code on their{' '}
         <span className="font-semibold">Mark with attendance code</span> page; the QR below takes them straight there. A
         code belongs to one lecture and only exists while that lecture is{' '}
-        <span className="font-semibold">open</span>, so open it first. The six digits change every 30 seconds.
+        <span className="font-semibold">open</span>, and only the lecture of the hour you are in can be. Right now that is {slotLabel(hourSlot().hour)}. The six digits change every 30 seconds.
       </p>
       <div className="sheet mb-4 flex flex-wrap items-end gap-3 p-4">
         <Field label="Start a lecture now" hint={`Recorded as the ${hourSlot().start}-${hourSlot().end} lecture`}>
@@ -724,11 +576,14 @@ function AttendanceCode() {
                   </td>
                   <td>
                     <div className="flex justify-end gap-1.5">
-                      {s.status === 'SCHEDULED' && (
-                        <button className="btn btn-primary btn-sm" onClick={() => open(s)}>
-                          Open and get code
-                        </button>
-                      )}
+                      {s.status === 'SCHEDULED' &&
+                        (isCurrentSlot(s) ? (
+                          <button className="btn btn-primary btn-sm" onClick={() => open(s)}>
+                            Open and get code
+                          </button>
+                        ) : (
+                          <Chip>Not this hour</Chip>
+                        ))}
                       {s.status === 'OPEN' && (
                         <button className="btn btn-quiet btn-sm" onClick={() => setShowFor(s)}>
                           Show code large
@@ -755,22 +610,18 @@ export default function Admin({ initialTab = 'system' }) {
   const [tab, setTab] = useState(initialTab)
   return (
     <>
-      <PageHeader title="System and audit" description="Health of the services, background jobs, cross-database sagas and the audit trail." />
+      <PageHeader title="System" description="Health of the services, background jobs, teachers, sign-up approvals and the attendance code." />
       <Tabs
         value={tab}
         onChange={setTab}
         tabs={[
           { value: 'system', label: 'System' },
-          { value: 'audit', label: 'Audit trail' },
-          { value: 'sagas', label: 'Sagas' },
           { value: 'teachers', label: 'Teachers' },
           { value: 'pending', label: 'Pending approvals' },
           { value: 'code', label: 'Attendance code' },
         ]}
       />
       {tab === 'system' && <System />}
-      {tab === 'audit' && <Audit />}
-      {tab === 'sagas' && <Sagas />}
       {tab === 'teachers' && <Teachers />}
       {tab === 'pending' && <PendingApprovals />}
       {tab === 'code' && <AttendanceCode />}

@@ -27,6 +27,31 @@ def normalise_username(username: str) -> str:
     return username.lower() if _EMAIL_RE.match(username) else username.upper()
 
 
+def hour_slot(now: dt.datetime | dt.time) -> tuple[dt.time, dt.time]:
+    """The one-hour slot a moment falls in: 09:06 -> (09:00, 10:00).
+
+    The last slot of the day ends at 23:59:59 so a lecture never spills onto the
+    next date.
+    """
+    hour = now.hour
+    if hour == 23:
+        return dt.time(23, 0), dt.time(23, 59, 59)
+    return dt.time(hour, 0), dt.time(hour + 1, 0)
+
+
+def slot_hour(value: Any) -> int:
+    """Hour of a start_time however the driver hands it over (TIME -> timedelta)."""
+    if isinstance(value, dt.timedelta):
+        return int(value.total_seconds()) // 3600
+    if isinstance(value, dt.time):
+        return value.hour
+    return int(str(value)[:2])
+
+
+def slot_label(hour: int) -> str:
+    return f"{hour:02d}:00-23:59" if hour == 23 else f"{hour:02d}:00-{hour + 1:02d}:00"
+
+
 def utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 

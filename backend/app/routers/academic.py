@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.core.deps import CurrentUser, get_current_user, require_admin, require_staff
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.security import generate_temp_password, hash_password, validate_password_strength
-from app.core.utils import format_time, normalise_username
+from app.core.utils import format_time, hour_slot, normalise_username, slot_hour, slot_label
 from app.db.mysql import transaction
 from app.repositories import courses as courses_repo
 from app.repositories import sessions as sessions_repo
@@ -29,15 +29,25 @@ def _session_out(row: dict) -> dict:
     return row
 
 
-def hour_slot(now: dt.datetime) -> tuple[dt.time, dt.time]:
-    """The one-hour slot `now` falls in: 08:43 -> (08:00, 09:00).
+def assert_current_slot(conn, session: dict) -> None:
+    """Refuse to open anything but the lecture belonging to the hour we are in.
 
-    The last hour of the day ends at 23:59:59 so the window stays on one date.
+    At 09:15 only the 09:00-10:00 lecture may be opened; the 08:00 one is over
+    and the 10:00 one has not started. This is the single place the rule lives,
+    so group attendance, late entry and live recognition all inherit it: they
+    can only work on a session that is OPEN.
     """
-    start = now.replace(minute=0, second=0, microsecond=0)
-    if start.hour == 23:
-        return start.time(), dt.time(23, 59, 59)
-    return start.time(), (start + dt.timedelta(hours=1)).time()
+    now = sessions_repo.db_now(conn)
+    session_day = session["session_date"]
+    if isinstance(session_day, dt.datetime):
+        session_day = session_day.date()
+    hour = slot_hour(session["start_time"])
+    if session_day != now.date() or hour != now.hour:
+        raise conflict(
+            f"It is {now:%H:%M}, so only the {slot_label(now.hour)} lecture can be open. "
+            f"This one is the {slot_label(hour)} lecture on {session_day}.",
+            "NOT_CURRENT_SLOT",
+            {"now": now.strftime("%H:%M"), "current_slot": slot_label(now.hour), "session_slot": slot_label(hour)})
 
 
 # ------------------------------------------------------------------ meta
@@ -167,8 +177,8 @@ def create_session(body: SessionCreate, user: CurrentUser = Depends(require_staf
             "session_date": body.session_date, "start_time": body.start_time, "end_time": body.end_time,
             "late_after_min": body.late_after_min, "room": body.room, "topic": body.topic})
         if body.open_now:
-            sessions_repo.open_session(conn, session_id, force=not s.session_window_enforced,
-                                       early_min=s.session_open_early_min)
+            assert_current_slot(conn, sessions_repo.get_session(conn, session_id) or {})
+            sessions_repo.open_session(conn, session_id, force=True, early_min=s.session_open_early_min)
         session = sessions_repo.get_session(conn, session_id)
     return _session_out(session or {"session_id": session_id})
 
@@ -217,11 +227,12 @@ def get_session(session_id: int, _: CurrentUser = Depends(require_staff)) -> dic
 @router.post("/sessions/{session_id}/open", summary="Open the attendance window (procedure open_session)")
 def open_session(session_id: int, body: SessionOpen | None = None, user: CurrentUser = Depends(require_staff)) -> dict:
     s = get_settings()
-    force = bool(body and body.force)
     with transaction() as conn:
         session = load_session(conn, session_id)
         assert_can_manage(conn, session, user)
-        sessions_repo.open_session(conn, session_id, force=force or not s.session_window_enforced,
+        # the clock decides, for admins too: only this hour's lecture opens
+        assert_current_slot(conn, session)
+        sessions_repo.open_session(conn, session_id, force=True,
                                    early_min=s.session_open_early_min)
         session = load_session(conn, session_id)
     event("session_opened", {"session_id": session_id, "course_code": session["course_code"]})
