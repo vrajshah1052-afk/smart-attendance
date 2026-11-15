@@ -47,6 +47,22 @@ services:
         value: admin@example.org
       - key: ADMIN_PASSWORD
         generateValue: true
+      # ---- teacher login: the 6-digit employee code is the username, no e-mail.
+      # The account is created on first boot and its password is re-synced from
+      # TEACHER_PASSWORD on every deploy, so changing it here changes the login.
+      - key: TEACHER_EMPLOYEE_CODE
+        value: "100101"
+      - key: TEACHER_PASSWORD
+        sync: false
+      - key: TEACHER_FULL_NAME
+        value: Prof. A. Deshmukh
+      - key: TEACHER_BRANCH
+        value: CS
+      # ---- student self sign-up from the login page; held until an admin approves
+      - key: SELF_REGISTRATION_ENABLED
+        value: "true"
+      - key: SIGNUP_REQUIRES_APPROVAL
+        value: "true"
       # ---- face engine: buffalo_s fits the 512 MB free instance
       - key: MATCH_THRESHOLD
         value: "0.45"

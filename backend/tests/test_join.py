@@ -74,7 +74,7 @@ def test_closed_or_reset_code_stops_joining(client, academic, teacher_headers, r
     assert client.post(f"/join/{new_code}", headers=headers).json()["joined"] is True
 
 
-def test_new_student_signs_up_from_class_code(client, academic, teacher_headers, photos) -> None:
+def test_new_student_signs_up_from_class_code(client, academic, teacher_headers, admin_headers, photos) -> None:
     course_id = academic["courses"]["TST201"]
     code = _poster(client, teacher_headers, course_id)["join_code"]
     prn = new_prn("JN")
@@ -85,16 +85,21 @@ def test_new_student_signs_up_from_class_code(client, academic, teacher_headers,
     res = client.post(f"/join/{code}/register", data=form, files=files)
     assert res.status_code == 201, res.text
     body = res.json()
-    assert body["access_token"] and body["user"]["role"] == "STUDENT" and body["user"]["prn"] == prn
-    assert body["user"]["must_change_password"] is False and body["embeddings_stored"] == 5
+    # nobody on staff vouched for this account, so it gets no token until an admin approves it
+    assert body["pending_approval"] is True and "access_token" not in body
+    assert body["prn"] == prn and body["embeddings_stored"] == 5
     assert _enrolled(prn, course_id)
     with transaction() as conn:
         student = fetch_one(conn, """SELECT s.face_status, d.name AS division, d.year_of_study FROM students s
                                      JOIN divisions d ON d.division_id = s.division_id WHERE s.prn = :p""", {"p": prn})
         saga = fetch_one(conn, "SELECT status, created_by FROM saga_log WHERE subject = :p", {"p": prn})
-    assert student == {"face_status": "ENROLLED", "division": "B", "year_of_study": 2}
+    assert student == {"face_status": "PENDING_APPROVAL", "division": "B", "year_of_study": 2}
     assert saga == {"status": "COMPLETED", "created_by": None}
-    # the chosen password works straight away
+
+    # the right password is not enough while the account is held
+    held = client.post("/auth/login", data={"username": prn, "password": "JoinPass12"})
+    assert held.status_code == 403 and held.json()["code"] == "PENDING_APPROVAL"
+    assert client.post(f"/students/{prn}/approve", headers=admin_headers).status_code == 200
     assert client.post("/auth/login", data={"username": prn, "password": "JoinPass12"}).status_code == 200
 
     # same face again under another PRN is blocked by the duplicate check

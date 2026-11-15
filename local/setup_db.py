@@ -6,6 +6,11 @@ usage:  python local/setup_db.py            (skips schema if attendance_db exist
         python local/setup_db.py --reset    (drops attendance_db + attendance_test first)
         python local/setup_db.py --env-file .env.cloud   (managed MySQL, e.g. Aiven: no test schema)
 
+Every file in db/mysql/migrations is applied afterwards, in name order. They are
+written for databases made before a feature existed, so on a fresh schema they
+fail with "duplicate column" and the like; those errors are reported as "already
+applied" and anything else stops the script.
+
 Passwords come from the project .env (MYSQL_ROOT_PASSWORD = your local root password).
 A cloud env file names the server instead: MYSQL_URI=mysql://avnadmin:<password>@<host>:<port>/defaultdb
 (or MYSQL_HOST / MYSQL_PORT / MYSQL_ROOT_USER / MYSQL_ROOT_PASSWORD) plus the three
@@ -47,6 +52,28 @@ def find_mysql() -> str:
     return found
 
 
+# a migration re-run on a schema that already has the change fails in a harmless way
+ALREADY_APPLIED = re.compile(r"duplicate column name|duplicate key name|already exists|duplicate entry",
+                             re.IGNORECASE)
+
+
+def apply_migrations(attempt, databases: list[str]) -> None:
+    """Run db/mysql/migrations/*.sql in name order against each database."""
+    files = sorted((SQL_DIR / "migrations").glob("*.sql"))
+    if not files:
+        return
+    for database in databases:
+        print(f"applying migrations to {database}")
+        for path in files:
+            ok, out = attempt(f"USE {database};\n" + path.read_text(encoding="utf-8"))
+            if ok:
+                print(f"  {path.name} applied")
+            elif ALREADY_APPLIED.search(out):
+                print(f"  {path.name} already applied")
+            else:
+                sys.exit(f"{path.name} on {database}: {out.strip()}")
+
+
 def main() -> None:
     cloud = "--env-file" in sys.argv
     env = read_env(Path(sys.argv[sys.argv.index("--env-file") + 1]) if cloud else ROOT / ".env")
@@ -63,11 +90,15 @@ def main() -> None:
             "--default-character-set=utf8mb4"] + (["--ssl-mode=REQUIRED"] if cloud else [])
     proc_env = {**os.environ, "MYSQL_PWD": env["MYSQL_ROOT_PASSWORD"]}
 
-    def run(sql: str, *extra: str) -> str:
+    def attempt(sql: str, *extra: str) -> tuple[bool, str]:
         res = subprocess.run(base + list(extra), input=sql.encode("utf-8"), env=proc_env, capture_output=True)
-        if res.returncode != 0:
-            sys.exit(res.stderr.decode("utf-8", "replace").strip())
-        return res.stdout.decode("utf-8", "replace")
+        return res.returncode == 0, (res.stdout if res.returncode == 0 else res.stderr).decode("utf-8", "replace")
+
+    def run(sql: str, *extra: str) -> str:
+        ok, out = attempt(sql, *extra)
+        if not ok:
+            sys.exit(out.strip())
+        return out
 
     exists = run("SHOW DATABASES LIKE 'attendance_db';", "-N", "-B").strip() == "attendance_db"
     if "--reset" in sys.argv:
@@ -99,6 +130,8 @@ def main() -> None:
         roles_sql += f"\nALTER USER '{user}'@'%' IDENTIFIED BY '{env[f'MYSQL_{kind}_PASSWORD']}';"
     print("creating roles and users")
     run(roles_sql)
+
+    apply_migrations(attempt, ["attendance_db"] if cloud else ["attendance_db", "attendance_test"])
     print("done")
 
 
