@@ -73,6 +73,13 @@ rules on start-up.
 4. Apply. The first build takes roughly ten minutes: it installs the Python
    dependencies, downloads the `buffalo_s` ONNX models and builds the React app.
 
+`smart-attendance.onrender.com` is already taken by an unrelated app, so Render
+will hand the service a suffixed hostname such as
+`smart-attendance-ab12.onrender.com`. Take the URL from the service page rather
+than guessing it, and rename `services[0].name` in `render.yaml` first if you
+want a different one. Renaming after the Blueprint exists creates a second
+service, so decide before the first apply.
+
 ### What the first boot does
 
 - creates the admin account from `ADMIN_EMAIL` and the generated
