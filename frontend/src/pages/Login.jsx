@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRight, AtSign, Database, Eye, EyeOff, KeyRound, Lock, QrCode, ScanFace, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowRight, AtSign, Database, Eye, EyeOff, KeyRound, Lock, QrCode, ScanFace, ShieldCheck, Sparkles, UserPlus } from 'lucide-react'
 import { Aurora } from '../components/Aurora'
 import { ErrorNote, Mark } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
@@ -184,11 +184,13 @@ export default function Login() {
             <ScanFace size={24} />
           </span>
           <h2 className="mt-5 text-[28px] font-bold">Welcome back</h2>
-          <p className="mt-1 text-sm text-muted">Staff use their college e-mail. Students use their PRN.</p>
+          <p className="mt-1 text-sm text-muted">
+            Admins use their e-mail, teachers their 6-digit employee code, students their PRN.
+          </p>
           <div className="mt-7 space-y-4">
             <div>
               <label className="label" htmlFor="username">
-                E-mail or PRN
+                E-mail, employee code or PRN
               </label>
               <div className="relative">
                 <AtSign size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
@@ -198,7 +200,7 @@ export default function Login() {
                   autoComplete="username"
                   autoFocus
                   required
-                  placeholder="you@college.edu or 12310001"
+                  placeholder="you@college.edu, 100101 or 12310001"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                 />
@@ -230,17 +232,33 @@ export default function Login() {
               </div>
             </div>
             <ErrorNote error={error} />
+            {error?.code === 'PENDING_APPROVAL' && (
+              <div className="rounded-xl border border-late/40 bg-late/10 p-3 text-sm">
+                Your account exists but an admin has not approved it yet. Once they approve you under
+                <span className="font-semibold"> Admin &rarr; Pending approvals</span>, sign in here again.
+              </div>
+            )}
             <button className="btn btn-primary group w-full py-3 text-[15px]" disabled={busy}>
               {busy ? 'Signing in…' : 'Sign in'}
               {!busy && <ArrowRight size={17} className="transition-transform group-hover:translate-x-0.5" />}
             </button>
           </div>
           <Link
-            to="/join"
+            to="/signup"
             className="mt-4 flex items-center justify-between rounded-xl border border-line/70 bg-panel2/50 px-4 py-3 text-sm transition-colors hover:border-ink/50"
           >
             <span>
-              <span className="font-semibold">Got a class code?</span> <span className="text-muted">Join a class or sign up</span>
+              <span className="font-semibold">New student? Sign up</span>{' '}
+              <span className="text-muted">Register your face, an admin approves you</span>
+            </span>
+            <UserPlus size={18} className="text-ink" />
+          </Link>
+          <Link
+            to="/join"
+            className="mt-2 flex items-center justify-between rounded-xl border border-line/70 bg-panel2/50 px-4 py-3 text-sm transition-colors hover:border-ink/50"
+          >
+            <span>
+              <span className="font-semibold">Got a class code?</span> <span className="text-muted">Join a class</span>
             </span>
             <QrCode size={18} className="text-ink" />
           </Link>

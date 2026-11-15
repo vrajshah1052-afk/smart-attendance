@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel, ValidationError
 
 from app.config import get_settings
-from app.core.deps import STUDENT, CurrentUser, get_current_user, require_staff
+from app.core.deps import SELF_SIGNUP, STUDENT, CurrentUser, get_current_user, require_staff
 from app.core.errors import AppError, conflict, forbidden, not_found
 from app.db.mysql import transaction
 from app.face.imageio import read_upload
@@ -27,9 +27,6 @@ from app.services.challenges import qr_png
 from app.services.notify import event
 
 router = APIRouter(tags=["join"])
-
-# actor recorded in the audit trail / saga log for sign-ups nobody on staff made
-SELF_SIGNUP = CurrentUser(user_id=None, username="self-registration", role=STUDENT)  # type: ignore[arg-type]
 
 
 class JoinToggle(BaseModel):
@@ -164,7 +161,7 @@ def self_register(
         raise validation_error(exc) from exc
     try:
         result = registration.register_student(payload, [read_upload(p, s.max_upload_bytes) for p in photos],
-                                               SELF_SIGNUP)
+                                               SELF_SIGNUP, requires_approval=s.signup_requires_approval)
     except AppError as exc:
         if exc.code == "DUPLICATE_FACE":  # same as above: no PRN of the matched student
             raise conflict("This face is already registered. Log in with your PRN and join instead",
@@ -175,5 +172,12 @@ def self_register(
         user = users_repo.get_by_username(conn, payload.prn)
         course = courses_repo.join_info(conn, course["course_id"]) or course
     event("course_joined", {"course_id": course["course_id"], "course_code": course["code"], "prn": payload.prn})
-    return {**issue_token(user or {}).model_dump(), "course": _course_out(course),
-            "embeddings_stored": result["embeddings_stored"], "courses_enrolled": result["courses_enrolled"]}
+    out = {"course": _course_out(course), "embeddings_stored": result["embeddings_stored"],
+           "courses_enrolled": result["courses_enrolled"], "prn": payload.prn,
+           "pending_approval": bool(result.get("pending_approval"))}
+    if out["pending_approval"]:
+        # no token: the account cannot be used until an admin approves it
+        out["message"] = ("You are signed up and enrolled in this class, but an admin has to approve "
+                          "your account before you can log in.")
+        return out
+    return {**issue_token(user or {}).model_dump(), **out}

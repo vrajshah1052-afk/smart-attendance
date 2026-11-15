@@ -82,7 +82,16 @@ def _embedding_docs(prn: str, photos: list[EnrolmentPhoto], source: str, saga_id
             for p in photos if p.accepted and p.embedding is not None]
 
 
-def register_student(payload: StudentCreate, photos: list[bytes], actor: CurrentUser) -> dict[str, Any]:
+def register_student(payload: StudentCreate, photos: list[bytes], actor: CurrentUser, *,
+                     requires_approval: bool = False, auto_enroll: bool = True) -> dict[str, Any]:
+    """Register a student and enrol their face.
+
+    requires_approval=True leaves the student in PENDING_APPROVAL instead of ENROLLED:
+    the row and the face templates exist, but /auth/login refuses the account until an
+    admin approves it (used for sign-ups nobody on staff made).
+    auto_enroll=False skips the automatic enrolment into every course of the
+    branch/year, so the student picks the courses themselves after approval.
+    """
     if payload.password:
         validate_password_strength(payload.password)
 
@@ -107,6 +116,7 @@ def register_student(payload: StudentCreate, photos: list[bytes], actor: Current
     def mysql_insert(ctx: dict[str, Any]) -> None:
         with transaction() as conn:
             with audit_context(conn, actor.user_id, "registration"):
+                # PENDING is the semantic lock held while the saga runs
                 students_repo.insert_student(conn, {
                     "prn": payload.prn, "full_name": payload.full_name, "email": payload.email,
                     "phone": payload.phone, "division_id": division["division_id"], "roll_no": payload.roll_no,
@@ -115,7 +125,7 @@ def register_student(payload: StudentCreate, photos: list[bytes], actor: Current
                                                         role="STUDENT", prn=payload.prn,
                                                         must_change=payload.password is None)
                 ctx["courses_enrolled"] = students_repo.auto_enroll(conn, payload.prn, division["branch_id"],
-                                                                    payload.year)
+                                                                   payload.year) if auto_enroll else 0
 
     def mysql_delete(_: dict[str, Any]) -> None:
         with transaction() as conn:
@@ -129,9 +139,11 @@ def register_student(payload: StudentCreate, photos: list[bytes], actor: Current
     def mongo_delete(ctx: dict[str, Any]) -> None:
         emb_repo.delete_by_saga(ctx["saga_id"])
 
+    final_status = "PENDING_APPROVAL" if requires_approval else "ENROLLED"
+
     def mysql_enrolled(_: dict[str, Any]) -> None:
         with transaction() as conn:
-            students_repo.set_face_status(conn, payload.prn, "ENROLLED")
+            students_repo.set_face_status(conn, payload.prn, final_status)
 
     def index_refresh(_: dict[str, Any]) -> None:
         face_service.notify_embeddings_changed()
@@ -155,9 +167,16 @@ def register_student(payload: StudentCreate, photos: list[bytes], actor: Current
                        if exc.compensated else "Registration failed; recovery job will clean up",
                        {"saga_id": exc.saga_id, "failed_step": exc.step}) from exc
 
-    notify("SYSTEM", "Student registered", f"{payload.full_name} ({payload.prn}) enrolled with "
-           f"{len(ctx.get('embedding_ids', []))} face templates.", audience_role="ADMIN",
-           data={"prn": payload.prn})
+    templates = len(ctx.get("embedding_ids", []))
+    if requires_approval:
+        notify("SYSTEM", "New sign-up waiting for approval",
+               f"{payload.full_name} ({payload.prn}) signed up with {templates} face templates "
+               f"and cannot log in until you approve them.", audience_role="ADMIN",
+               data={"prn": payload.prn, "pending_approval": True})
+    else:
+        notify("SYSTEM", "Student registered",
+               f"{payload.full_name} ({payload.prn}) enrolled with {templates} face templates.",
+               audience_role="ADMIN", data={"prn": payload.prn})
     logger.info("Registered %s with %d templates (saga %s)", payload.prn, len(ctx["embedding_ids"]), ctx["saga_id"])
     with transaction() as conn:
         student = students_repo.get_student(conn, payload.prn)
@@ -169,6 +188,8 @@ def register_student(payload: StudentCreate, photos: list[bytes], actor: Current
         "photos": [p.public() for p in analysed],
         "temp_password": None if payload.password else temp_password,
         "username": payload.prn,
+        "pending_approval": requires_approval,
+        "face_status": final_status,
     }
 
 

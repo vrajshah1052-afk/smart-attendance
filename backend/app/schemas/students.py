@@ -70,5 +70,10 @@ class StudentUpdate(BaseModel):
     reason: str | None = Field(default=None, max_length=255)
 
 
+class RejectRequest(BaseModel):
+    reason: str = Field(min_length=5, max_length=500,
+                        description="Why the sign-up is rejected (kept in the audit trail)")
+
+
 class ForgetRequest(BaseModel):
     confirm_prn: str = Field(description="Type the PRN again to confirm irreversible erasure")

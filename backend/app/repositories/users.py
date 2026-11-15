@@ -89,6 +89,19 @@ def create_teacher(conn: Connection, *, employee_code: str, full_name: str, emai
     return int(result.lastrowid)
 
 
+def teacher_by_code(conn: Connection, employee_code: str) -> dict[str, Any] | None:
+    return fetch_one(conn, "SELECT * FROM teachers WHERE employee_code = :c", {"c": employee_code})
+
+
+def user_by_teacher_id(conn: Connection, teacher_id: int) -> dict[str, Any] | None:
+    return fetch_one(conn, USER_SELECT + " WHERE u.teacher_id = :t", {"t": teacher_id})
+
+
+def any_branch_id(conn: Connection) -> int | None:
+    value = fetch_scalar(conn, "SELECT branch_id FROM branches ORDER BY branch_id LIMIT 1")
+    return int(value) if value is not None else None
+
+
 def branch_id(conn: Connection, code: str) -> int | None:
     value = fetch_scalar(conn, "SELECT branch_id FROM branches WHERE code = :c", {"c": code})
     return int(value) if value is not None else None

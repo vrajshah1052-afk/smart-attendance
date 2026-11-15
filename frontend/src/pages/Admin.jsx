@@ -1,6 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { Chip, Empty, ErrorNote, Field, PageHeader, Spinner, Tabs, fmtDateTime } from '../components/ui'
+import {
+  Chip,
+  Empty,
+  ErrorNote,
+  Field,
+  Modal,
+  PageHeader,
+  SessionStatus,
+  Spinner,
+  Tabs,
+  fmtDate,
+  fmtDateTime,
+  todayISO,
+} from '../components/ui'
 import { useToast } from '../context/ToastContext'
 import { useApi } from '../hooks/useApi'
 
@@ -289,6 +302,331 @@ function Teachers() {
   )
 }
 
+function PendingApprovals() {
+  const toast = useToast()
+  const pending = useApi(() => api.get('/students/pending'), [])
+  const [busy, setBusy] = useState(null)
+  const [rejecting, setRejecting] = useState(null)
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState(null)
+
+  const approve = async (prn) => {
+    setBusy(prn)
+    try {
+      await api.post(`/students/${prn}/approve`)
+      toast.success(`${prn} approved and can sign in now`)
+      pending.reload()
+    } catch (err) {
+      toast.error(err)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const reject = async (e) => {
+    e.preventDefault()
+    setError(null)
+    setBusy(rejecting.prn)
+    try {
+      await api.post(`/students/${rejecting.prn}/reject`, { reason: reason.trim() })
+      toast.success(`${rejecting.prn} rejected; account and face templates erased`)
+      setRejecting(null)
+      setReason('')
+      pending.reload()
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <>
+      <p className="mb-3 max-w-prose text-sm text-muted">
+        Students who created their own account (<span className="font-semibold">Sign up</span> on the login page, or a
+        class code) wait here. They cannot sign in until you approve them. Rejecting erases the account and the
+        encrypted face templates.
+      </p>
+      <ErrorNote error={pending.error} className="mb-3" />
+      <div className="sheet overflow-x-auto">
+        {pending.loading ? (
+          <Spinner className="p-4" />
+        ) : !pending.data?.items?.length ? (
+          <Empty title="Nobody is waiting for approval">
+            New sign-ups from the login page show up here within seconds.
+          </Empty>
+        ) : (
+          <table className="register min-w-[880px]">
+            <thead>
+              <tr>
+                <th>PRN</th>
+                <th>Name</th>
+                <th>Branch</th>
+                <th>Year</th>
+                <th>Division</th>
+                <th className="roll">Roll</th>
+                <th>Contact</th>
+                <th className="text-right">Faces</th>
+                <th>Signed up</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {pending.data.items.map((s) => (
+                <tr key={s.prn}>
+                  <td className="font-bold">{s.prn}</td>
+                  <td className="whitespace-nowrap">{s.full_name}</td>
+                  <td>{s.branch}</td>
+                  <td>Year {s.year}</td>
+                  <td>{s.division}</td>
+                  <td className="roll">{s.roll_no}</td>
+                  <td className="text-xs text-muted">
+                    {s.email}
+                    {s.phone && <div>{s.phone}</div>}
+                  </td>
+                  <td className="tnum text-right">{s.face_templates ?? '-'}</td>
+                  <td className="whitespace-nowrap text-xs">{fmtDateTime(s.created_at)}</td>
+                  <td>
+                    <div className="flex justify-end gap-1.5">
+                      <button className="btn btn-primary btn-sm" disabled={busy === s.prn} onClick={() => approve(s.prn)}>
+                        Approve
+                      </button>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        disabled={busy === s.prn}
+                        onClick={() => {
+                          setRejecting(s)
+                          setReason('')
+                          setError(null)
+                        }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <Modal
+        open={!!rejecting}
+        title={`Reject ${rejecting?.prn || ''}`}
+        onClose={() => setRejecting(null)}
+        footer={
+          <>
+            <button className="btn btn-quiet" onClick={() => setRejecting(null)}>
+              Cancel
+            </button>
+            <button className="btn btn-danger" form="reject-form" disabled={reason.trim().length < 5}>
+              Reject and erase
+            </button>
+          </>
+        }
+      >
+        <form id="reject-form" onSubmit={reject} className="space-y-3">
+          <p className="text-sm text-muted">
+            {rejecting?.full_name} ({rejecting?.prn}) is deleted together with their login and their face templates.
+            This cannot be undone; they can sign up again afterwards.
+          </p>
+          <Field label="Reason" hint="Kept in the audit trail, at least 5 characters">
+            {(id) => (
+              <input
+                id={id}
+                className="input"
+                required
+                minLength={5}
+                maxLength={500}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            )}
+          </Field>
+          <ErrorNote error={error} />
+        </form>
+      </Modal>
+    </>
+  )
+}
+
+/** Live six-digit code + QR of one open session. Both change every QR window. */
+function AttendanceCodeCard({ session }) {
+  const [qr, setQr] = useState(null)
+  const [error, setError] = useState(null)
+  useEffect(() => {
+    let timer
+    let alive = true
+    const load = async () => {
+      try {
+        const data = await api.get(`/sessions/${session.session_id}/qr`)
+        if (!alive) return
+        setQr(data)
+        setError(null)
+        timer = setTimeout(load, Math.max(2, data.expires_in) * 1000)
+      } catch (err) {
+        if (alive) setError(err)
+      }
+    }
+    load()
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [session.session_id])
+
+  return (
+    <div className="sheet p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-bold">
+          {session.course_code} <span className="font-normal text-muted">{session.topic || session.room || ''}</span>
+        </p>
+        <SessionStatus status={session.status} />
+      </div>
+      <p className="mt-0.5 text-xs text-muted">
+        {fmtDate(session.session_date)}, {session.start_time}-{session.end_time}
+      </p>
+      <ErrorNote error={error} className="mt-3" />
+      {qr && (
+        <div className="mt-4 flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
+          <img src={qr.qr_png} alt="Rotating attendance QR code" className="w-40 rounded bg-white p-2" />
+          <div className="text-center sm:text-left">
+            <p className="eyebrow">Six-digit code</p>
+            <p className="tnum text-5xl font-bold tracking-[0.2em]">{qr.code}</p>
+            <p className="mt-1 text-xs text-muted">Changes in {qr.expires_in}s. Session {session.session_id}.</p>
+          </div>
+        </div>
+      )}
+      {!qr && !error && <Spinner className="mt-4" />}
+    </div>
+  )
+}
+
+function AttendanceCode() {
+  const toast = useToast()
+  const [date, setDate] = useState(todayISO())
+  const sessions = useApi(() => api.get('/sessions', date ? { date } : undefined), [date])
+  const [showFor, setShowFor] = useState(null)
+
+  const openSession = async (s, force) => {
+    await api.post(`/sessions/${s.session_id}/open`, { force })
+    toast.success(`${s.course_code} is open`)
+    const fresh = await sessions.reload()
+    const row = (fresh || []).find((x) => x.session_id === s.session_id)
+    setShowFor(row || { ...s, status: 'OPEN' })
+  }
+
+  const open = async (s) => {
+    try {
+      await openSession(s, false)
+    } catch (err) {
+      if (err.code === 'OUTSIDE_SESSION_WINDOW' && window.confirm(`${err.message}. Open it anyway?`)) {
+        try {
+          await openSession(s, true)
+        } catch (err2) {
+          toast.error(err2)
+        }
+      } else {
+        toast.error(err)
+      }
+    }
+  }
+
+  const rows = sessions.data || []
+  const openRows = rows.filter((s) => s.status === 'OPEN')
+
+  return (
+    <>
+      <p className="mb-4 max-w-prose text-sm text-muted">
+        When the camera does not recognise a student, they mark themselves with this code on their{' '}
+        <span className="font-semibold">Mark with attendance code</span> page; the QR below takes them straight there. A
+        code belongs to one lecture and only exists while that lecture is{' '}
+        <span className="font-semibold">open</span>, so open it first. The six digits change every 30 seconds.
+      </p>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <input type="date" className="input w-auto" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Date" />
+        <button className="btn btn-quiet btn-sm" onClick={() => setDate(todayISO())}>
+          Today
+        </button>
+        <button className="btn btn-quiet btn-sm" onClick={() => setDate('')}>
+          All dates
+        </button>
+        <button className="btn btn-quiet btn-sm" onClick={() => sessions.reload()}>
+          Refresh
+        </button>
+      </div>
+      <ErrorNote error={sessions.error} className="mb-3" />
+
+      {openRows.length > 0 && (
+        <div className="mb-6 grid gap-4 lg:grid-cols-2">
+          {openRows.map((s) => (
+            <AttendanceCodeCard key={s.session_id} session={s} />
+          ))}
+        </div>
+      )}
+
+      <div className="sheet overflow-x-auto">
+        {sessions.loading ? (
+          <Spinner className="p-4" />
+        ) : !rows.length ? (
+          <Empty title="No lectures on this date">
+            Create one under Sessions, then open it to get an attendance code.
+          </Empty>
+        ) : (
+          <table className="register min-w-[700px]">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Course</th>
+                <th>Status</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr key={s.session_id}>
+                  <td className="whitespace-nowrap">{fmtDate(s.session_date)}</td>
+                  <td className="tnum whitespace-nowrap">
+                    {s.start_time}-{s.end_time}
+                  </td>
+                  <td>
+                    <span className="font-bold">{s.course_code}</span>{' '}
+                    {s.topic && <span className="text-muted">{s.topic}</span>}
+                  </td>
+                  <td>
+                    <SessionStatus status={s.status} />
+                  </td>
+                  <td>
+                    <div className="flex justify-end gap-1.5">
+                      {s.status === 'SCHEDULED' && (
+                        <button className="btn btn-primary btn-sm" onClick={() => open(s)}>
+                          Open and get code
+                        </button>
+                      )}
+                      {s.status === 'OPEN' && (
+                        <button className="btn btn-quiet btn-sm" onClick={() => setShowFor(s)}>
+                          Show code large
+                        </button>
+                      )}
+                      {s.status !== 'SCHEDULED' && s.status !== 'OPEN' && <Chip>No code: lecture is {s.status.toLowerCase()}</Chip>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <Modal open={!!showFor} title={`Attendance code for ${showFor?.course_code || ''}`} onClose={() => setShowFor(null)} wide>
+        {showFor && <AttendanceCodeCard session={showFor} />}
+      </Modal>
+    </>
+  )
+}
+
 export default function Admin() {
   const [tab, setTab] = useState('system')
   return (
@@ -302,12 +640,16 @@ export default function Admin() {
           { value: 'audit', label: 'Audit trail' },
           { value: 'sagas', label: 'Sagas' },
           { value: 'teachers', label: 'Teachers' },
+          { value: 'pending', label: 'Pending approvals' },
+          { value: 'code', label: 'Attendance code' },
         ]}
       />
       {tab === 'system' && <System />}
       {tab === 'audit' && <Audit />}
       {tab === 'sagas' && <Sagas />}
       {tab === 'teachers' && <Teachers />}
+      {tab === 'pending' && <PendingApprovals />}
+      {tab === 'code' && <AttendanceCode />}
     </>
   )
 }

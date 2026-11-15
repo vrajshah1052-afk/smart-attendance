@@ -23,7 +23,15 @@ def _user_out(row: dict) -> UserOut:
                    must_change_password=bool(row["must_change_password"]))
 
 
-@router.post("/login", response_model=TokenResponse, summary="Login (email for staff, PRN for students)")
+def _awaiting_approval(conn, user: dict) -> bool:
+    """True for a student who signed up themselves and has not been approved yet."""
+    if user["role"] != "STUDENT" or not user["prn"]:
+        return False
+    student = students_repo.get_student(conn, user["prn"])
+    return bool(student and student["face_status"] == "PENDING_APPROVAL")
+
+
+@router.post("/login", response_model=TokenResponse, summary="Login (e-mail for admins, employee code for teachers, PRN for students)")
 def login(form: OAuth2PasswordRequestForm = Depends()) -> TokenResponse:
     s = get_settings()
     username = form.username.strip()
@@ -41,6 +49,10 @@ def login(form: OAuth2PasswordRequestForm = Depends()) -> TokenResponse:
         elif not verify_password(form.password, user["password_hash"]):
             users_repo.record_login_failure(conn, user["user_id"], s.login_max_failures, s.login_lock_minutes)
             error = AppError(401, "INVALID_CREDENTIALS", "Invalid username or password")
+        elif _awaiting_approval(conn, user):
+            # the password was right, so telling them the account is held gives nothing away
+            error = AppError(403, "PENDING_APPROVAL",
+                             "Your account is waiting for an admin to approve it. You can log in once approved.")
         else:
             users_repo.record_login_success(conn, user["user_id"])
     # raise only after COMMIT so the failed-attempt counter is persisted

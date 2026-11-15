@@ -36,6 +36,10 @@ class CurrentUser:
         return self.role == ADMIN
 
 
+# Actor recorded in the audit trail / saga log for sign-ups nobody on staff made.
+SELF_SIGNUP = CurrentUser(user_id=None, username="self-registration", role=STUDENT)  # type: ignore[arg-type]
+
+
 def user_from_token(token: str) -> CurrentUser:
     payload = decode_token(token)
     try:

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, GraduationCap, KeyRound, ScanFace, Sparkles, UserRound, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, Clock, GraduationCap, KeyRound, ScanFace, Sparkles, UserRound, Users } from 'lucide-react'
 import { api } from '../api/client'
 import { Aurora } from '../components/Aurora'
 import { PhotoCapture } from '../components/PhotoCapture'
@@ -127,6 +127,22 @@ function CourseCard({ info }) {
 
 function Joined({ result }) {
   const c = result.course
+  if (result.pending_approval) {
+    return (
+      <section className="sheet glow-border mt-6 p-7 text-center">
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-glow3 via-ink to-late text-white shadow-[0_12px_36px_-10px_rgb(var(--glow3))]">
+          <Clock size={32} strokeWidth={3} />
+        </span>
+        <h2 className="mt-5 text-[26px] font-bold">Account created — pending approval</h2>
+        <p className="mx-auto mt-2 max-w-prose text-muted">
+          {result.message || 'Your account is ready and your face is registered, but it needs admin approval before you can login.'}
+        </p>
+        <p className="mx-auto mt-4 max-w-prose text-sm text-muted">
+          Your teacher will review and approve your registration. Once approved, you can login with your PRN and password.
+        </p>
+      </section>
+    )
+  }
   return (
     <section className="sheet glow-border mt-6 p-7 text-center">
       <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-glow2 via-ink to-glow1 text-white shadow-[0_12px_36px_-10px_rgb(var(--glow2))]">
@@ -221,8 +237,12 @@ function SignUpJoin({ code, info, onJoined }) {
       usable.slice(0, info.max_photos).forEach((p, i) => data.append('photos', p.blob, `photo${i}.jpg`))
       const res = await api.form(`/join/${code}/register`, data)
       cam.stop()
-      adopt(res)
-      onJoined({ course: res.course, joined: true, newAccount: true })
+      if (res.pending_approval) {
+        onJoined({ course: res.course, joined: false, newAccount: true, pending_approval: true, message: res.message })
+      } else {
+        adopt(res)
+        onJoined({ course: res.course, joined: true, newAccount: true })
+      }
     } catch (err) {
       setError(err)
       if (['PRN_EXISTS', 'EMAIL_EXISTS', 'ROLL_EXISTS', 'UNKNOWN_DIVISION', 'VALIDATION_ERROR'].includes(err.code)) setStep('details')

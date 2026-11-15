@@ -80,8 +80,13 @@ export function SessionStatus({ status }) {
   return <Chip tone={SESSION_TONE[status] || 'muted'}>{SESSION_TEXT[status] || status}</Chip>
 }
 
-const FACE_TONE = { ENROLLED: 'ink', PENDING: 'late', REENROLL_REQUIRED: 'absent' }
-const FACE_TEXT = { ENROLLED: 'Face enrolled', PENDING: 'No face yet', REENROLL_REQUIRED: 'Re-enrol face' }
+const FACE_TONE = { ENROLLED: 'ink', PENDING: 'late', PENDING_APPROVAL: 'late', REENROLL_REQUIRED: 'absent' }
+const FACE_TEXT = {
+  ENROLLED: 'Face enrolled',
+  PENDING: 'No face yet',
+  PENDING_APPROVAL: 'Waiting for approval',
+  REENROLL_REQUIRED: 'Re-enrol face',
+}
 export function FaceStatus({ status }) {
   return <Chip tone={FACE_TONE[status] || 'muted'}>{FACE_TEXT[status] || status}</Chip>
 }

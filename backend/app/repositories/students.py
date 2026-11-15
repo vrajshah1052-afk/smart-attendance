@@ -144,3 +144,14 @@ def academic_structure(conn: Connection) -> list[dict[str, Any]]:
         SELECT b.branch_id, b.code, b.name, d.division_id, d.year_of_study, d.name AS division
           FROM branches b JOIN divisions d ON d.branch_id = b.branch_id
          ORDER BY b.code, d.year_of_study, d.name""")
+
+
+def list_pending_approval(conn: Connection) -> list[dict[str, Any]]:
+    return fetch_all(conn, """
+        SELECT s.prn, s.full_name, s.email, s.phone, s.roll_no, s.face_status, s.created_at,
+               d.name AS division, d.year_of_study AS year, b.code AS branch
+          FROM students s
+          JOIN divisions d ON d.division_id = s.division_id
+          JOIN branches b ON b.branch_id = d.branch_id
+         WHERE s.face_status = 'PENDING_APPROVAL'
+         ORDER BY s.created_at""")

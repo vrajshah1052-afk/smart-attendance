@@ -14,8 +14,9 @@ from app.db.mysql import audit_context, transaction
 from app.face.imageio import read_upload
 from app.repositories import embeddings as emb_repo
 from app.repositories import students as students_repo
-from app.schemas.students import ForgetRequest, StudentCreate, StudentUpdate
+from app.schemas.students import ForgetRequest, RejectRequest, StudentCreate, StudentUpdate
 from app.services import importer, privacy, registration
+from app.services.notify import event, notify
 
 router = APIRouter(prefix="/students", tags=["students"])
 
@@ -90,6 +91,55 @@ def list_students(
     for r in rows:
         r["face_templates"] = counts.get(r["prn"])
     return {"items": rows, "total": total, "limit": limit, "offset": offset}
+
+
+@router.get("/pending", summary="Sign-ups waiting for admin approval")
+def list_pending_approval(_: CurrentUser = Depends(require_admin)) -> dict:
+    with transaction() as conn:
+        rows = students_repo.list_pending_approval(conn)
+    try:
+        counts = emb_repo.counts_by_prn([r["prn"] for r in rows])
+    except Exception:  # noqa: BLE001 - Mongo down: the list still works
+        counts = {}
+    for r in rows:
+        r["face_templates"] = counts.get(r["prn"])
+    return {"items": rows, "total": len(rows)}
+
+
+def _pending_student(conn, prn: str) -> dict:
+    student = students_repo.get_student(conn, prn)
+    if not student:
+        raise not_found("Student not found", "STUDENT_NOT_FOUND")
+    if student["face_status"] != "PENDING_APPROVAL":
+        raise bad_request(f"{prn} is not waiting for approval (face status {student['face_status']})",
+                          "NOT_PENDING_APPROVAL")
+    return student
+
+
+@router.post("/{prn}/approve", summary="Approve a sign-up: the student can log in from now on")
+def approve_student(prn: str, actor: CurrentUser = Depends(require_admin)) -> dict:
+    prn = prn.upper()
+    with transaction() as conn:
+        with audit_context(conn, actor.user_id, "sign-up approved"):
+            student = _pending_student(conn, prn)
+            students_repo.set_face_status(conn, prn, "ENROLLED")
+        student = students_repo.get_student(conn, prn)
+    notify("SYSTEM", "Your account was approved",
+           "You can now log in with your PRN and join your courses with a class code.", recipient_prn=prn)
+    event("student_approved", {"prn": prn})
+    return {"prn": prn, "face_status": "ENROLLED", "student": student}
+
+
+@router.post("/{prn}/reject", summary="Reject a sign-up: the account and its face templates are erased")
+def reject_student(prn: str, body: RejectRequest, actor: CurrentUser = Depends(require_admin)) -> dict:
+    prn = prn.upper()
+    with transaction() as conn:
+        _pending_student(conn, prn)
+    # DELETE saga across MySQL + MongoDB: the row, the login and the face templates all go,
+    # and the reason stays in the audit trail
+    result = privacy.remove_student(prn, actor, forget=False, reason=f"sign-up rejected: {body.reason}"[:255])
+    event("student_rejected", {"prn": prn})
+    return {"prn": prn, "rejected": True, "reason": body.reason, "saga_id": result.get("saga_id")}
 
 
 @router.get("/me", summary="Own student profile")

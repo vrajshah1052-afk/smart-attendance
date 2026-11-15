@@ -16,7 +16,7 @@ from app.core.middleware import RequestContextMiddleware
 from app.db.mongo import close_client
 from app.db.mysql import dispose_engine
 from app.logging_config import configure_logging
-from app.routers import academic, admin, attendance, auth, join, reports, students, workflow, ws
+from app.routers import academic, admin, attendance, auth, join, reports, signup, students, workflow, ws
 from app.services import face_service
 from app.services.bootstrap import run_startup
 from app.services.privacy import recover_sagas
@@ -43,6 +43,7 @@ TAGS = [
     {"name": "attendance", "description": "Group photo, late entry, QR fallback and reports"},
     {"name": "academic", "description": "Courses, teachers, sessions (time window), QR codes"},
     {"name": "join", "description": "Class codes: students scan a course QR to join (and sign up with their face)"},
+    {"name": "signup", "description": "Public self sign-up from the login page (admin approval required)"},
     {"name": "workflow", "description": "Manual overrides, low-confidence review queue, notifications"},
     {"name": "reports", "description": "CSV / Excel / PDF exports and analytics"},
     {"name": "admin", "description": "Health, jobs, saga log, audit trail"},
@@ -75,7 +76,7 @@ def create_app() -> FastAPI:
                        allow_methods=["*"], allow_headers=["*"])
     app.add_middleware(RequestContextMiddleware)
     register_exception_handlers(app)
-    for module in (auth, students, attendance, academic, join, workflow, reports, admin, ws):
+    for module in (auth, signup, students, attendance, academic, join, workflow, reports, admin, ws):
         app.include_router(module.router)
     return app
 

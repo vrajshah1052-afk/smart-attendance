@@ -24,6 +24,7 @@ const QrMark = lazy(() => import('./pages/QrMark'))
 const Account = lazy(() => import('./pages/Account'))
 const Courses = lazy(() => import('./pages/Courses'))
 const JoinCourse = lazy(() => import('./pages/JoinCourse'))
+const Signup = lazy(() => import('./pages/Signup'))
 
 const STAFF = ['ADMIN', 'TEACHER']
 
@@ -78,6 +79,8 @@ export default function App() {
       <Suspense fallback={<div className="p-8"><Spinner /></div>}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* public: a student creates their own account (admin approves it) */}
+          <Route path="/signup" element={<Signup />} />
           {/* public: where a scanned course QR lands */}
           <Route path="/join" element={<JoinCourse />} />
           <Route path="/join/:code" element={<JoinCourse />} />
