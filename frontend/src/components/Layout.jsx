@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   BarChart3, BookOpen, CalendarClock, ClipboardCheck, FileSpreadsheet, GitPullRequestArrow, Home, KeyRound, LogOut, Menu,
-  Moon, QrCode, Radio, ScanFace, Settings2, Sun, Timer, Upload, UserPlus, Users, X, ListChecks,
+  Moon, QrCode, Radio, ScanFace, Settings2, Sun, Timer, Upload, UserCheck, UserPlus, Users, X, ListChecks,
 } from 'lucide-react'
+import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Aurora } from './Aurora'
@@ -64,7 +65,7 @@ function NavList({ groups, onNavigate }) {
         <div key={g.section}>
           <p className="eyebrow px-3 pb-2">{g.section}</p>
           <ul className="flex flex-col gap-1">
-            {g.items.map(({ to, label, icon: Icon, end }) => (
+            {g.items.map(({ to, label, icon: Icon, end, badge }) => (
               <li key={to}>
                 <NavLink
                   to={to}
@@ -89,6 +90,14 @@ function NavList({ groups, onNavigate }) {
                         className={isActive ? 'text-ink drop-shadow-[0_0_6px_rgb(var(--ink)/0.8)]' : 'transition-colors group-hover:text-ink'}
                       />
                       {label}
+                      {badge > 0 && (
+                        <span
+                          className="ml-auto min-w-[22px] rounded-full bg-late/20 px-1.5 py-0.5 text-center text-xs font-bold text-late"
+                          title={`${badge} waiting for approval`}
+                        >
+                          {badge > 99 ? '99+' : badge}
+                        </span>
+                      )}
                     </>
                   )}
                 </NavLink>
@@ -99,6 +108,31 @@ function NavList({ groups, onNavigate }) {
       ))}
     </nav>
   )
+}
+
+/** How many self sign-ups are waiting for an admin. 0 for everyone else. */
+function usePendingApprovals(isAdmin, pathname) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (!isAdmin) {
+      setCount(0)
+      return undefined
+    }
+    let alive = true
+    const load = () =>
+      api
+        .get('/students/pending')
+        .then((d) => alive && setCount(d.total ?? d.items?.length ?? 0))
+        .catch(() => {})
+    load()
+    // Admin.jsx fires this after an approve or a reject so the badge keeps up
+    window.addEventListener('sfa:approvals-changed', load)
+    return () => {
+      alive = false
+      window.removeEventListener('sfa:approvals-changed', load)
+    }
+  }, [isAdmin, pathname])
+  return count
 }
 
 function currentLabel(groups, pathname) {
@@ -122,8 +156,21 @@ export function Layout() {
     setMenu(false)
   }, [location.pathname])
 
+  const pendingApprovals = usePendingApprovals(isAdmin, location.pathname)
+
   const groups = isStaff
-    ? [...STAFF_NAV, ...(isAdmin ? [{ section: 'Admin', items: [{ to: '/admin', label: 'System and audit', icon: Settings2 }] }] : [])]
+    ? [
+        ...STAFF_NAV,
+        ...(isAdmin
+          ? [{
+              section: 'Admin',
+              items: [
+                { to: '/approvals', label: 'Student approvals', icon: UserCheck, badge: pendingApprovals },
+                { to: '/admin', label: 'System and audit', icon: Settings2 },
+              ],
+            }]
+          : []),
+      ]
     : STUDENT_NAV
 
   const brand = (

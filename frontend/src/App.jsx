@@ -99,6 +99,8 @@ export default function App() {
             <Route path="/reports" element={guard(<Reports />, STAFF)} />
             <Route path="/analytics" element={guard(<Analytics />, STAFF)} />
             <Route path="/admin" element={guard(<Admin />, ['ADMIN'])} />
+            {/* same page, opened straight on the approval queue (sidebar entry) */}
+            <Route path="/approvals" element={guard(<Admin initialTab="pending" />, ['ADMIN'])} />
             <Route path="/me" element={guard(<StudentPortal />, ['STUDENT'])} />
             <Route path="/qr" element={guard(<QrMark />, ['STUDENT'])} />
             <Route path="/qr/:sessionId/:code" element={guard(<QrMark />, ['STUDENT'])} />

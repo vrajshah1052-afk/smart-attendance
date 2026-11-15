@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -9,6 +10,21 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 from app.config import get_settings
+
+
+# A username is an e-mail only when it has an @ AND a dot after it. Employee
+# codes look like VIT@001, so the @ on its own cannot decide this.
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def normalise_username(username: str) -> str:
+    """Fold a login name to the form it is stored in.
+
+    E-mails are lower-cased; everything else (PRNs, employee codes such as
+    VIT@001) is upper-cased, so the sign-in box is case-insensitive either way.
+    """
+    username = (username or "").strip()
+    return username.lower() if _EMAIL_RE.match(username) else username.upper()
 
 
 def utcnow() -> dt.datetime:

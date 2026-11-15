@@ -12,6 +12,7 @@ import {
   Tabs,
   fmtDate,
   fmtDateTime,
+  hourSlot,
   todayISO,
 } from '../components/ui'
 import { useToast } from '../context/ToastContext'
@@ -244,60 +245,148 @@ function Audit() {
 function Teachers() {
   const toast = useToast()
   const list = useApi(() => api.get('/teachers'), [])
-  const [form, setForm] = useState({ employee_code: '', full_name: '', email: '', branch: 'CS', designation: 'Assistant Professor' })
+  const [form, setForm] = useState({ employee_code: '', full_name: '', email: '', branch: 'CS', designation: 'Assistant Professor', password: '' })
   const [error, setError] = useState(null)
   const [created, setCreated] = useState(null)
+  const [resetting, setResetting] = useState(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [resetError, setResetError] = useState(null)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
   const submit = async (e) => {
     e.preventDefault()
     setError(null)
     try {
-      const res = await api.post('/teachers', form)
+      const res = await api.post('/teachers', { ...form, password: form.password || null })
       setCreated(res)
-      toast.success('Teacher added')
+      toast.success(`${form.full_name} can sign in with ${res.username}`)
+      setForm({ employee_code: '', full_name: '', email: '', branch: 'CS', designation: 'Assistant Professor', password: '' })
       list.reload()
     } catch (err) {
       setError(err)
     }
   }
+
+  const resetPassword = async (e) => {
+    e.preventDefault()
+    setResetError(null)
+    try {
+      const res = await api.post(`/teachers/${resetting.teacher_id}/password`, { password: newPassword || null })
+      toast.success(res.temp_password ? `One-time password: ${res.temp_password}` : `Password set for ${res.username}`)
+      setResetting(null)
+      setNewPassword('')
+    } catch (err) {
+      setResetError(err)
+    }
+  }
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
-      <div className="sheet overflow-x-auto">
-        <table className="register">
-          <thead>
-            <tr>
-              <th>Teacher</th>
-              <th>Branch</th>
-              <th>Sign-in</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.data?.map((t) => (
-              <tr key={t.teacher_id}>
-                <td>
-                  {t.full_name} <div className="text-xs text-muted">{t.designation}, {t.employee_code}</div>
-                </td>
-                <td>{t.branch}</td>
-                <td className="text-xs">{t.email}</td>
+      <div>
+        <p className="mb-3 max-w-prose text-sm text-muted">
+          Teachers never register themselves. An admin adds them here and picks the password; the teacher signs in with
+          the <span className="font-semibold">employee code</span>, not an e-mail, and can change the password from
+          their own account afterwards.
+        </p>
+        <div className="sheet overflow-x-auto">
+          <table className="register min-w-[560px]">
+            <thead>
+              <tr>
+                <th>Teacher</th>
+                <th>Branch</th>
+                <th>Signs in with</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.data?.map((t) => (
+                <tr key={t.teacher_id}>
+                  <td>
+                    {t.full_name}
+                    <div className="text-xs text-muted">
+                      {t.designation}
+                      {t.email ? `, ${t.email}` : ''}
+                    </div>
+                  </td>
+                  <td>{t.branch}</td>
+                  <td className="font-bold">{t.employee_code}</td>
+                  <td>
+                    <div className="flex justify-end">
+                      <button
+                        className="btn btn-quiet btn-sm"
+                        onClick={() => {
+                          setResetting(t)
+                          setNewPassword('')
+                          setResetError(null)
+                        }}
+                      >
+                        Set password
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+
       <form onSubmit={submit} className="sheet space-y-3 p-4">
         <h2 className="text-lg">Add a teacher</h2>
-        <Field label="Employee code">{(id) => <input id={id} className="input" required value={form.employee_code} onChange={set('employee_code')} />}</Field>
+        <Field label="Employee code" hint="This is the username, e.g. VIT@006">
+          {(id) => <input id={id} className="input" required value={form.employee_code} onChange={set('employee_code')} />}
+        </Field>
         <Field label="Full name">{(id) => <input id={id} className="input" required value={form.full_name} onChange={set('full_name')} />}</Field>
-        <Field label="E-mail">{(id) => <input id={id} type="email" className="input" required value={form.email} onChange={set('email')} />}</Field>
+        <Field label="E-mail" hint="For notifications; not used to sign in">
+          {(id) => <input id={id} type="email" className="input" required value={form.email} onChange={set('email')} />}
+        </Field>
         <Field label="Branch code">{(id) => <input id={id} className="input uppercase" required value={form.branch} onChange={set('branch')} />}</Field>
+        <Field label="Password" hint="Leave empty for a one-time password the teacher must change">
+          {(id) => <input id={id} type="text" className="input" autoComplete="new-password" minLength={8} value={form.password} onChange={set('password')} />}
+        </Field>
         <ErrorNote error={error} />
         <button className="btn btn-primary">Add teacher</button>
-        {created?.temp_password && (
+        {created && (
           <p className="text-sm">
-            One-time password for {created.username}: <span className="tnum font-bold">{created.temp_password}</span>
+            {created.username} can sign in now
+            {created.temp_password && (
+              <>
+                {' '}with the one-time password <span className="tnum font-bold">{created.temp_password}</span>
+              </>
+            )}
+            .
           </p>
         )}
       </form>
+
+      <Modal
+        open={!!resetting}
+        title={`Password for ${resetting?.full_name || ''}`}
+        onClose={() => setResetting(null)}
+        footer={
+          <>
+            <button className="btn btn-quiet" onClick={() => setResetting(null)}>
+              Cancel
+            </button>
+            <button className="btn btn-primary" form="teacher-password-form">
+              Save password
+            </button>
+          </>
+        }
+      >
+        <form id="teacher-password-form" onSubmit={resetPassword} className="space-y-3">
+          <p className="text-sm text-muted">
+            {resetting?.full_name} signs in with <span className="font-bold">{resetting?.employee_code}</span>. Leave
+            the field empty to generate a one-time password they must change at first sign-in.
+          </p>
+          <Field label="New password" hint="At least 8 characters with a letter and a digit">
+            {(id) => (
+              <input id={id} type="text" className="input" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            )}
+          </Field>
+          <ErrorNote error={resetError} />
+        </form>
+      </Modal>
     </div>
   )
 }
@@ -315,6 +404,7 @@ function PendingApprovals() {
     try {
       await api.post(`/students/${prn}/approve`)
       toast.success(`${prn} approved and can sign in now`)
+      window.dispatchEvent(new Event('sfa:approvals-changed'))
       pending.reload()
     } catch (err) {
       toast.error(err)
@@ -330,6 +420,7 @@ function PendingApprovals() {
     try {
       await api.post(`/students/${rejecting.prn}/reject`, { reason: reason.trim() })
       toast.success(`${rejecting.prn} rejected; account and face templates erased`)
+      window.dispatchEvent(new Event('sfa:approvals-changed'))
       setRejecting(null)
       setReason('')
       pending.reload()
@@ -507,7 +598,24 @@ function AttendanceCode() {
   const toast = useToast()
   const [date, setDate] = useState(todayISO())
   const sessions = useApi(() => api.get('/sessions', date ? { date } : undefined), [date])
+  const courses = useApi(() => api.get('/courses'), [])
+  const [startCourse, setStartCourse] = useState('')
   const [showFor, setShowFor] = useState(null)
+
+  // one click: a lecture for the clock hour we are in, already open, code on screen
+  const startNow = async () => {
+    const course_id = Number(startCourse || courses.data?.[0]?.course_id)
+    if (!course_id) return
+    try {
+      const s = await api.post('/sessions/now', { course_id })
+      toast.success(`${s.course_code} is open, ${s.start_time}-${s.end_time}`)
+      setDate(todayISO())
+      sessions.reload()
+      setShowFor(s)
+    } catch (err) {
+      toast.error(err)
+    }
+  }
 
   const openSession = async (s, force) => {
     await api.post(`/sessions/${s.session_id}/open`, { force })
@@ -544,6 +652,22 @@ function AttendanceCode() {
         code belongs to one lecture and only exists while that lecture is{' '}
         <span className="font-semibold">open</span>, so open it first. The six digits change every 30 seconds.
       </p>
+      <div className="sheet mb-4 flex flex-wrap items-end gap-3 p-4">
+        <Field label="Start a lecture now" hint={`Recorded as the ${hourSlot().start}-${hourSlot().end} lecture`}>
+          {(id) => (
+            <select id={id} className="input w-auto" value={startCourse} onChange={(e) => setStartCourse(e.target.value)}>
+              {(courses.data || []).map((c) => (
+                <option key={c.course_id} value={c.course_id}>
+                  {c.code} {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+        <button className="btn btn-primary" onClick={startNow} disabled={!courses.data?.length}>
+          Start and show the code
+        </button>
+      </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input type="date" className="input w-auto" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Date" />
         <button className="btn btn-quiet btn-sm" onClick={() => setDate(todayISO())}>
@@ -627,8 +751,8 @@ function AttendanceCode() {
   )
 }
 
-export default function Admin() {
-  const [tab, setTab] = useState('system')
+export default function Admin({ initialTab = 'system' }) {
+  const [tab, setTab] = useState(initialTab)
   return (
     <>
       <PageHeader title="System and audit" description="Health of the services, background jobs, cross-database sagas and the audit trail." />

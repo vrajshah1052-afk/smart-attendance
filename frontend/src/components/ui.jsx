@@ -234,6 +234,13 @@ export function fmtDateTime(value) {
     : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+/** The one-hour slot the clock is in right now: 08:43 -> { start: '08:00', end: '09:00' }. */
+export function hourSlot(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  const h = date.getHours()
+  return { start: `${pad(h)}:00`, end: h === 23 ? '23:59' : `${pad(h + 1)}:00` }
+}
+
 export function todayISO() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

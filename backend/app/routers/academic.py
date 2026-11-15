@@ -9,13 +9,14 @@ from app.config import get_settings
 from app.core.deps import CurrentUser, get_current_user, require_admin, require_staff
 from app.core.errors import bad_request, conflict, forbidden, not_found
 from app.core.security import generate_temp_password, hash_password, validate_password_strength
-from app.core.utils import format_time
+from app.core.utils import format_time, normalise_username
 from app.db.mysql import transaction
 from app.repositories import courses as courses_repo
 from app.repositories import sessions as sessions_repo
 from app.repositories import students as students_repo
 from app.repositories import users as users_repo
-from app.schemas.academic import CourseCreate, EnrollRequest, SessionCreate, SessionOpen, TeacherCreate
+from app.schemas.academic import (CourseCreate, EnrollRequest, SessionCreate, SessionNow, SessionOpen,
+                                  TeacherCreate, TeacherPassword)
 from app.services.attendance import assert_can_manage, load_session
 from app.services.challenges import qr_payload
 from app.services.notify import event, notify
@@ -26,6 +27,17 @@ router = APIRouter(tags=["academic"])
 def _session_out(row: dict) -> dict:
     row["start_time"], row["end_time"] = format_time(row["start_time"]), format_time(row["end_time"])
     return row
+
+
+def hour_slot(now: dt.datetime) -> tuple[dt.time, dt.time]:
+    """The one-hour slot `now` falls in: 08:43 -> (08:00, 09:00).
+
+    The last hour of the day ends at 23:59:59 so the window stays on one date.
+    """
+    start = now.replace(minute=0, second=0, microsecond=0)
+    if start.hour == 23:
+        return start.time(), dt.time(23, 59, 59)
+    return start.time(), (start + dt.timedelta(hours=1)).time()
 
 
 # ------------------------------------------------------------------ meta
@@ -84,20 +96,47 @@ def list_teachers(_: CurrentUser = Depends(require_staff)) -> list[dict]:
         return users_repo.list_teachers(conn)
 
 
-@router.post("/teachers", status_code=201, summary="Create teacher + login (admin)")
+@router.post("/teachers", status_code=201,
+             summary="Create teacher + login (admin only; teachers never register themselves)")
 def create_teacher(body: TeacherCreate, _: CurrentUser = Depends(require_admin)) -> dict:
+    """Only an admin makes a teacher account, and the admin picks the password.
+
+    The employee code is the username: a teacher signs in with the code, not an
+    e-mail. Leaving the password out generates a one-time one the teacher must
+    change on first login.
+    """
     password = body.password or generate_temp_password()
     validate_password_strength(password)
+    username = normalise_username(body.employee_code)
     with transaction() as conn:
         branch_id = users_repo.branch_id(conn, body.branch.upper())
         if branch_id is None:
             raise bad_request("Unknown branch", "UNKNOWN_BRANCH")
-        teacher_id = users_repo.create_teacher(conn, employee_code=body.employee_code.upper(), full_name=body.full_name,
+        if users_repo.get_by_username(conn, username):
+            raise conflict(f"Employee code {username} is already taken", "EMPLOYEE_CODE_EXISTS")
+        teacher_id = users_repo.create_teacher(conn, employee_code=username, full_name=body.full_name,
                                                email=body.email.lower(), phone=body.phone, branch_id=branch_id,
                                                designation=body.designation)
-        users_repo.create_user(conn, username=body.email.lower(), password_hash=hash_password(password),
+        users_repo.create_user(conn, username=username, password_hash=hash_password(password),
                                role="TEACHER", teacher_id=teacher_id, must_change=body.password is None)
-    return {"teacher_id": teacher_id, "username": body.email.lower(),
+    return {"teacher_id": teacher_id, "username": username,
+            "temp_password": None if body.password else password}
+
+
+@router.post("/teachers/{teacher_id}/password", summary="Set or reset a teacher's password (admin)")
+def set_teacher_password(teacher_id: int, body: TeacherPassword, _: CurrentUser = Depends(require_admin)) -> dict:
+    """Teachers cannot register themselves, so an admin must be able to reset a
+    forgotten password. The teacher can change it again from their account."""
+    password = body.password or generate_temp_password()
+    validate_password_strength(password)
+    with transaction() as conn:
+        user = users_repo.user_by_teacher_id(conn, teacher_id)
+        if not user:
+            raise not_found("This teacher has no login", "TEACHER_LOGIN_NOT_FOUND")
+        users_repo.set_password(conn, int(user["user_id"]), hash_password(password),
+                                must_change=body.password is None)
+        username = user["username"]
+    return {"teacher_id": teacher_id, "username": username,
             "temp_password": None if body.password else password}
 
 
@@ -131,6 +170,41 @@ def create_session(body: SessionCreate, user: CurrentUser = Depends(require_staf
             sessions_repo.open_session(conn, session_id, force=not s.session_window_enforced,
                                        early_min=s.session_open_early_min)
         session = sessions_repo.get_session(conn, session_id)
+    return _session_out(session or {"session_id": session_id})
+
+
+@router.post("/sessions/now", status_code=201,
+             summary="Start a lecture now: the session covers the clock hour you are in")
+def create_session_now(body: SessionNow, user: CurrentUser = Depends(require_staff)) -> dict:
+    """A lecture started at 08:43 is recorded as the 08:00-09:00 slot.
+
+    The clock comes from MySQL, the same one the attendance rows are stamped
+    with. Starting the same course twice in one hour reopens that slot instead
+    of colliding with the (course, date, start_time) unique key.
+    """
+    s = get_settings()
+    with transaction() as conn:
+        course = courses_repo.get_course(conn, body.course_id)
+        if not course:
+            raise not_found("Course not found", "COURSE_NOT_FOUND")
+        teacher_id = body.teacher_id if user.is_admin and body.teacher_id else user.teacher_id
+        if not user.is_admin and course["teacher_id"] != user.teacher_id and teacher_id != user.teacher_id:
+            raise forbidden()
+        now = sessions_repo.db_now(conn)
+        start, end = hour_slot(now)
+        existing = sessions_repo.find_by_slot(conn, body.course_id, now.date(), start)
+        if existing:
+            session_id = int(existing["session_id"])
+            if existing["status"] == "SCHEDULED":
+                sessions_repo.open_session(conn, session_id, force=True, early_min=s.session_open_early_min)
+        else:
+            session_id = sessions_repo.create_session(conn, {
+                "course_id": body.course_id, "teacher_id": teacher_id or course["teacher_id"],
+                "session_date": now.date(), "start_time": start, "end_time": end,
+                "late_after_min": body.late_after_min, "room": body.room, "topic": body.topic})
+            sessions_repo.open_session(conn, session_id, force=True, early_min=s.session_open_early_min)
+        session = sessions_repo.get_session(conn, session_id)
+    event("session_opened", {"session_id": session_id, "course_code": course["code"]})
     return _session_out(session or {"session_id": session_id})
 
 

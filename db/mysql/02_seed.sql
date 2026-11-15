@@ -1,6 +1,9 @@
 -- =====================================================================
---  Seed data: 5 branches, 60 divisions, 4 teachers, 3 courses,
+--  Seed data: 5 branches, 60 divisions, 5 teachers, 5 SY semester-3 subjects,
 --  20 students, 10 sessions (8 closed with attendance + 2 today).
+--  Teachers sign in with their employee code (VIT@001), never an e-mail, and
+--  only an admin ever creates one - see local/seed_subjects.py for the
+--  passwords, which SQL cannot hash.
 --  Dates are relative to CURDATE() so the demo always looks "recent".
 --  User accounts are created WITHOUT passwords: the backend activates
 --  them on boot with DEMO_USER_PASSWORD (no secrets in SQL files).
@@ -26,23 +29,29 @@ SET @it := (SELECT branch_id FROM branches WHERE code = 'IT');
 SET @cs2a := (SELECT division_id FROM divisions WHERE branch_id = @cs AND year_of_study = 2 AND name = 'A');
 
 INSERT INTO teachers (employee_code, full_name, email, phone, branch_id, designation) VALUES
-  ('VIT-CS-101', 'Dr. Anjali Deshmukh', 'anjali.deshmukh@faculty.example.org', '9822000101', @cs, 'Professor'),
-  ('VIT-CS-102', 'Prof. Rahul Kulkarni', 'rahul.kulkarni@faculty.example.org', '9822000102', @cs, 'Associate Professor'),
-  ('VIT-CS-103', 'Prof. Meera Iyer',     'meera.iyer@faculty.example.org',     '9822000103', @cs, 'Assistant Professor'),
-  ('VIT-IT-201', 'Dr. Sameer Patwardhan','sameer.patwardhan@faculty.example.org','9822000201', @it, 'Professor');
+  ('VIT@001', 'Renuka Vaidya', 'renuka.vaidya@vit.edu', '9822000101', @cs, 'Assistant Professor'),
+  ('VIT@002', 'Jyoti Yadav',   'jyoti.yadav@vit.edu',   '9822000102', @cs, 'Associate Professor'),
+  ('VIT@003', 'Manisha More',  'manisha.more@vit.edu',  '9822000103', @cs, 'Assistant Professor'),
+  ('VIT@004', 'Tejal Panmand', 'tejal.panmand@vit.edu', '9822000104', @cs, 'Assistant Professor'),
+  ('VIT@005', 'Rahul Rathod',  'rahul.rathod@vit.edu',  '9822000105', @cs, 'Assistant Professor');
 
-SET @t1 := (SELECT teacher_id FROM teachers WHERE employee_code = 'VIT-CS-101');
-SET @t2 := (SELECT teacher_id FROM teachers WHERE employee_code = 'VIT-CS-102');
-SET @t3 := (SELECT teacher_id FROM teachers WHERE employee_code = 'VIT-CS-103');
+SET @t_ds   := (SELECT teacher_id FROM teachers WHERE employee_code = 'VIT@001');
+SET @t_dbms := (SELECT teacher_id FROM teachers WHERE employee_code = 'VIT@002');
+SET @t_oop  := (SELECT teacher_id FROM teachers WHERE employee_code = 'VIT@003');
+SET @t_dm   := (SELECT teacher_id FROM teachers WHERE employee_code = 'VIT@004');
+SET @t_ldm  := (SELECT teacher_id FROM teachers WHERE employee_code = 'VIT@005');
 
+-- SY Computer Engineering, semester 3
 INSERT INTO courses (code, name, credits, branch_id, year_of_study, semester, teacher_id) VALUES
-  ('CS2201', 'Database Management Systems', 4, @cs, 2, 4, @t1),
-  ('CS2202', 'Operating Systems',           3, @cs, 2, 4, @t2),
-  ('CS2203', 'Computer Networks',           3, @cs, 2, 4, @t3);
+  ('DS',   'Data Structures',                  4, @cs, 2, 3, @t_ds),
+  ('DBMS', 'Database Management Systems',      4, @cs, 2, 3, @t_dbms),
+  ('OOP',  'Object Oriented Programming',      4, @cs, 2, 3, @t_oop),
+  ('LDM',  'Logic Design and Microprocessors', 3, @cs, 2, 3, @t_ldm),
+  ('DM',   'Discrete Mathematics',             3, @cs, 2, 3, @t_dm);
 
-SET @dbms := (SELECT course_id FROM courses WHERE code = 'CS2201');
-SET @os   := (SELECT course_id FROM courses WHERE code = 'CS2202');
-SET @cn   := (SELECT course_id FROM courses WHERE code = 'CS2203');
+SET @ds   := (SELECT course_id FROM courses WHERE code = 'DS');
+SET @dbms := (SELECT course_id FROM courses WHERE code = 'DBMS');
+SET @oop  := (SELECT course_id FROM courses WHERE code = 'OOP');
 
 -- 20 students of SY CS division A
 INSERT INTO students (prn, full_name, email, phone, division_id, roll_no, consent_given, face_status) VALUES
@@ -67,22 +76,22 @@ INSERT INTO students (prn, full_name, email, phone, division_id, roll_no, consen
   ('12310019', 'Harsh Wagh',        'harsh.wagh@student.example.org',        '9876500019', @cs2a, 19, TRUE, 'PENDING'),
   ('12310020', 'Gauri Bapat',       'gauri.bapat@student.example.org',       '9876500020', @cs2a, 20, TRUE, 'PENDING');
 
--- everybody takes all three courses
+-- everybody takes all five subjects
 INSERT INTO enrollments (prn, course_id)
 SELECT s.prn, c.course_id FROM students s CROSS JOIN courses c;
 
 -- 10 sessions: 8 closed in the past 9 days, 2 scheduled today
 INSERT INTO sessions (course_id, teacher_id, session_date, start_time, end_time, late_after_min, status, opened_at, closed_at, room, topic) VALUES
-  (@dbms, @t1, CURDATE() - INTERVAL 9 DAY, '09:00:00', '10:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 9 DAY, '08:55:00'), TIMESTAMP(CURDATE() - INTERVAL 9 DAY, '10:05:00'), 'A-301', 'ER modelling'),
-  (@os,   @t2, CURDATE() - INTERVAL 8 DAY, '11:00:00', '12:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 8 DAY, '10:58:00'), TIMESTAMP(CURDATE() - INTERVAL 8 DAY, '12:02:00'), 'A-302', 'Process scheduling'),
-  (@cn,   @t3, CURDATE() - INTERVAL 7 DAY, '14:00:00', '15:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 7 DAY, '13:57:00'), TIMESTAMP(CURDATE() - INTERVAL 7 DAY, '15:03:00'), 'B-105', 'OSI and TCP/IP'),
-  (@dbms, @t1, CURDATE() - INTERVAL 6 DAY, '09:00:00', '10:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 6 DAY, '08:56:00'), TIMESTAMP(CURDATE() - INTERVAL 6 DAY, '10:04:00'), 'A-301', 'Relational algebra'),
-  (@os,   @t2, CURDATE() - INTERVAL 5 DAY, '11:00:00', '12:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 5 DAY, '10:59:00'), TIMESTAMP(CURDATE() - INTERVAL 5 DAY, '12:01:00'), 'A-302', 'Deadlocks'),
-  (@cn,   @t3, CURDATE() - INTERVAL 4 DAY, '14:00:00', '15:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 4 DAY, '13:58:00'), TIMESTAMP(CURDATE() - INTERVAL 4 DAY, '15:02:00'), 'B-105', 'Subnetting'),
-  (@dbms, @t1, CURDATE() - INTERVAL 2 DAY, '09:00:00', '10:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 2 DAY, '08:57:00'), TIMESTAMP(CURDATE() - INTERVAL 2 DAY, '10:03:00'), 'A-301', 'Normalisation'),
-  (@os,   @t2, CURDATE() - INTERVAL 1 DAY, '11:00:00', '12:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 1 DAY, '10:58:00'), TIMESTAMP(CURDATE() - INTERVAL 1 DAY, '12:02:00'), 'A-302', 'Paging'),
-  (@dbms, @t1, CURDATE(),                  '09:00:00', '10:00:00', 10, 'SCHEDULED', NULL, NULL, 'A-301', 'Transactions and ACID'),
-  (@os,   @t2, CURDATE(),                  '11:00:00', '12:00:00', 10, 'SCHEDULED', NULL, NULL, 'A-302', 'Virtual memory');
+  (@dbms, @t_dbms, CURDATE() - INTERVAL 9 DAY, '09:00:00', '10:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 9 DAY, '08:55:00'), TIMESTAMP(CURDATE() - INTERVAL 9 DAY, '10:05:00'), 'A-301', 'ER modelling'),
+  (@ds,   @t_ds, CURDATE() - INTERVAL 8 DAY, '11:00:00', '12:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 8 DAY, '10:58:00'), TIMESTAMP(CURDATE() - INTERVAL 8 DAY, '12:02:00'), 'A-302', 'Process scheduling'),
+  (@oop,  @t_oop, CURDATE() - INTERVAL 7 DAY, '14:00:00', '15:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 7 DAY, '13:57:00'), TIMESTAMP(CURDATE() - INTERVAL 7 DAY, '15:03:00'), 'B-105', 'OSI and TCP/IP'),
+  (@dbms, @t_dbms, CURDATE() - INTERVAL 6 DAY, '09:00:00', '10:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 6 DAY, '08:56:00'), TIMESTAMP(CURDATE() - INTERVAL 6 DAY, '10:04:00'), 'A-301', 'Relational algebra'),
+  (@ds,   @t_ds, CURDATE() - INTERVAL 5 DAY, '11:00:00', '12:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 5 DAY, '10:59:00'), TIMESTAMP(CURDATE() - INTERVAL 5 DAY, '12:01:00'), 'A-302', 'Deadlocks'),
+  (@oop,  @t_oop, CURDATE() - INTERVAL 4 DAY, '14:00:00', '15:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 4 DAY, '13:58:00'), TIMESTAMP(CURDATE() - INTERVAL 4 DAY, '15:02:00'), 'B-105', 'Subnetting'),
+  (@dbms, @t_dbms, CURDATE() - INTERVAL 2 DAY, '09:00:00', '10:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 2 DAY, '08:57:00'), TIMESTAMP(CURDATE() - INTERVAL 2 DAY, '10:03:00'), 'A-301', 'Normalisation'),
+  (@ds,   @t_ds, CURDATE() - INTERVAL 1 DAY, '11:00:00', '12:00:00', 10, 'CLOSED', TIMESTAMP(CURDATE() - INTERVAL 1 DAY, '10:58:00'), TIMESTAMP(CURDATE() - INTERVAL 1 DAY, '12:02:00'), 'A-302', 'Paging'),
+  (@dbms, @t_dbms, CURDATE(),                  '09:00:00', '10:00:00', 10, 'SCHEDULED', NULL, NULL, 'A-301', 'Transactions and ACID'),
+  (@ds,   @t_ds, CURDATE(),                  '11:00:00', '12:00:00', 10, 'SCHEDULED', NULL, NULL, 'A-302', 'Virtual memory');
 
 -- Deterministic pseudo-random attendance for the closed sessions.
 -- Roll 17-20 are "low attenders" so the shortage list is not empty.
@@ -112,9 +121,10 @@ SELECT y.session_id, y.prn, y.status,
                ) x
        ) y;
 
--- login principals (activated by the backend on first boot)
+-- login principals (activated by the backend on first boot).
+-- A teacher's username is the employee code, not their e-mail.
 INSERT INTO users (username, password_hash, role, teacher_id)
-SELECT email, NULL, 'TEACHER', teacher_id FROM teachers;
+SELECT employee_code, NULL, 'TEACHER', teacher_id FROM teachers;
 
 INSERT INTO users (username, password_hash, role, prn)
 SELECT prn, NULL, 'STUDENT', prn FROM students;

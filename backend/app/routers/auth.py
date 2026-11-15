@@ -9,6 +9,7 @@ from app.core.deps import CurrentUser, get_current_user
 from app.core.errors import AppError
 from app.core.security import (create_access_token, dummy_verify, hash_password, validate_password_strength,
                                verify_password)
+from app.core.utils import normalise_username
 from app.db.mysql import transaction
 from app.repositories import students as students_repo
 from app.repositories import users as users_repo
@@ -34,8 +35,7 @@ def _awaiting_approval(conn, user: dict) -> bool:
 @router.post("/login", response_model=TokenResponse, summary="Login (e-mail for admins, employee code for teachers, PRN for students)")
 def login(form: OAuth2PasswordRequestForm = Depends()) -> TokenResponse:
     s = get_settings()
-    username = form.username.strip()
-    username = username.lower() if "@" in username else username.upper()
+    username = normalise_username(form.username)
     error: AppError | None = None
     with transaction() as conn:
         user = users_repo.get_by_username(conn, username)

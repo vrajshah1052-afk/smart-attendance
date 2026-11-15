@@ -28,7 +28,7 @@ class SessionOpen(BaseModel):
 
 
 class CourseCreate(BaseModel):
-    code: str = Field(min_length=3, max_length=15)
+    code: str = Field(min_length=2, max_length=15)
     name: str = Field(min_length=3, max_length=150)
     credits: int = Field(default=3, ge=1, le=6)
     branch: str
@@ -45,6 +45,21 @@ class CourseCreate(BaseModel):
 
 class EnrollRequest(BaseModel):
     prns: list[str] = Field(min_length=1, max_length=500)
+
+
+class TeacherPassword(BaseModel):
+    password: str | None = Field(default=None, max_length=72,
+                                 description="Leave out to generate a one-time password")
+
+
+class SessionNow(BaseModel):
+    """Start a lecture in the clock hour we are in right now."""
+
+    course_id: int
+    late_after_min: int = Field(default=10, ge=0, le=60)
+    room: str | None = Field(default=None, max_length=20)
+    topic: str | None = Field(default=None, max_length=200)
+    teacher_id: int | None = None
 
 
 class TeacherCreate(BaseModel):

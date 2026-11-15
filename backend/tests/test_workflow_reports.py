@@ -105,8 +105,9 @@ def test_login_lockout_after_failures(client, admin_headers) -> None:
                                          "email": "lock.test@example.org", "branch": "CS",
                                          "password": "LockPass123"}, headers=admin_headers)
     assert res.status_code == 201, res.text
+    assert res.json()["username"] == "TST-LOCK"  # the code is the login, not the e-mail
     for _ in range(5):
-        assert client.post("/auth/login", data={"username": "lock.test@example.org",
+        assert client.post("/auth/login", data={"username": "TST-LOCK",
                                                 "password": "wrong-pass1"}).status_code == 401
-    locked = client.post("/auth/login", data={"username": "lock.test@example.org", "password": "LockPass123"})
+    locked = client.post("/auth/login", data={"username": "TST-LOCK", "password": "LockPass123"})
     assert locked.status_code == 423 and locked.json()["code"] == "ACCOUNT_LOCKED"

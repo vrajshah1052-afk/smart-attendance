@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { Empty, ErrorNote, Field, Mark, Modal, PageHeader, SessionStatus, Spinner, fmtDate, todayISO } from '../components/ui'
+import { Empty, ErrorNote, Field, Mark, Modal, PageHeader, SessionStatus, Spinner, fmtDate, hourSlot, todayISO } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { useApi } from '../hooks/useApi'
@@ -80,7 +80,11 @@ function RosterModal({ session, onClose }) {
   )
 }
 
-const BLANK = { course_id: '', session_date: todayISO(), start_time: '09:00', end_time: '10:00', late_after_min: 10, room: '', topic: '', open_now: false }
+// a new lecture defaults to the hour you are in, so 08:43 offers 08:00-09:00
+const blank = () => {
+  const { start, end } = hourSlot()
+  return { course_id: '', session_date: todayISO(), start_time: start, end_time: end, late_after_min: 10, room: '', topic: '', open_now: false }
+}
 
 export default function Sessions() {
   const toast = useToast()
@@ -117,6 +121,23 @@ export default function Sessions() {
     }
   }
 
+  // one click: a session for the clock hour we are in, already open
+  const startNow = async () => {
+    const course_id = Number(filters.course_id || courses.data?.[0]?.course_id)
+    if (!course_id) return
+    const name = courses.data?.find((c) => c.course_id === course_id)?.code || 'this course'
+    const { start, end } = hourSlot()
+    if (!window.confirm(`Start ${name} now? It is recorded as the ${start}-${end} lecture.`)) return
+    try {
+      const s = await api.post('/sessions/now', { course_id })
+      toast.success(`${s.course_code} is open, ${s.start_time}-${s.end_time}`)
+      sessions.reload()
+      setQrFor(s)
+    } catch (err) {
+      toast.error(err)
+    }
+  }
+
   const createSession = async (e) => {
     e.preventDefault()
     setError(null)
@@ -138,9 +159,14 @@ export default function Sessions() {
         title="Sessions"
         description="Each lecture is a session. Attendance can only be marked while it is open; closing it marks everyone else absent."
         actions={
-          <button className="btn btn-primary" onClick={() => setForm({ ...BLANK, course_id: courses.data?.[0]?.course_id || '' })}>
-            New session
-          </button>
+          <>
+            <button className="btn btn-primary" onClick={startNow} disabled={!courses.data?.length}>
+              Start a lecture now
+            </button>
+            <button className="btn btn-quiet" onClick={() => setForm({ ...blank(), course_id: filters.course_id || courses.data?.[0]?.course_id || '' })}>
+              New session
+            </button>
+          </>
         }
       />
       <div className="mb-4 flex flex-wrap gap-3">

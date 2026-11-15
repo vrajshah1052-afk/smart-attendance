@@ -40,6 +40,18 @@ def list_sessions(conn: Connection, *, course_id: int | None = None, day: dt.dat
                                ORDER BY session_date DESC, start_time DESC LIMIT :limit""", params)
 
 
+def db_now(conn: Connection) -> dt.datetime:
+    """The database clock: attendance timestamps come from the same NOW()."""
+    return fetch_one(conn, "SELECT NOW() AS now")["now"]
+
+
+def find_by_slot(conn: Connection, course_id: int, day: dt.date, start: dt.time) -> dict[str, Any] | None:
+    return fetch_one(conn, """
+        SELECT * FROM sessions
+         WHERE course_id = :c AND session_date = :d AND start_time = :s""",
+                     {"c": course_id, "d": day, "s": start})
+
+
 def create_session(conn: Connection, data: dict[str, Any]) -> int:
     result = execute(conn, """
         INSERT INTO sessions (course_id, teacher_id, session_date, start_time, end_time, late_after_min, room, topic)

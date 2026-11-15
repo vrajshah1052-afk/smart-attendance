@@ -44,6 +44,18 @@ variable, so Render only asks for the handful marked `sync: false`.
    It is safe to run again: the schema step is skipped once `attendance_db`
    exists, and a migration already applied is reported as such.
 
+5. Put the five SY semester-3 subjects and their teachers in, with the
+   passwords SQL cannot hash:
+
+   ```
+   backend\.venv\Scripts\python.exe -I local\seed_subjects.py --env-file .env.cloud
+   ```
+
+   Also idempotent. On a database seeded before this change it renames the
+   three demo courses onto the first three subjects, so their sessions and
+   attendance survive, and adds the other two. It prints every teacher's
+   employee code and password when it finishes.
+
 ## 2. MongoDB on Atlas
 
 1. Create a free **M0** cluster and a database user.
@@ -85,8 +97,10 @@ service, so decide before the first apply.
 - creates the admin account from `ADMIN_EMAIL` and the generated
   `ADMIN_PASSWORD` — read it under **Environment** in the Render dashboard, and
   change it from the app afterwards;
-- creates the teacher from `TEACHER_EMPLOYEE_CODE` (username) and
-  `TEACHER_PASSWORD`, and re-syncs that password on every later deploy;
+- creates the optional extra teacher from `TEACHER_EMPLOYEE_CODE` (username)
+  and `TEACHER_PASSWORD`, re-syncing that password on every later deploy. The
+  real faculty come from `local/seed_subjects.py` or the admin's Teachers tab;
+  a teacher never registers themselves.
 - creates the MongoDB collections, indexes and TTL rules;
 - loads the face engine (the first request after a cold start is slow).
 
@@ -95,7 +109,7 @@ service, so decide before the first apply.
 | Who | Username | Password |
 |---|---|---|
 | Admin | `ADMIN_EMAIL` | `ADMIN_PASSWORD` (generated, in the dashboard) |
-| Teacher | `TEACHER_EMPLOYEE_CODE`, e.g. `100101` | `TEACHER_PASSWORD` |
+| Teacher | their employee code, e.g. `VIT@001` | set by the admin (`local/seed_subjects.py` for the first five) |
 | Student | their PRN | chosen at sign-up |
 
 Students sign up themselves at `/signup`. The account is held until an admin
